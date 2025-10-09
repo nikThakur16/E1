@@ -1,0 +1,109 @@
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import ProcessingModal from "../components/web/ProcessingModal";
+import VerificationModal from "../components/web/VerificationModal";
+import { useVerifyEmailByLinkMutation } from "../store/api/authApi";
+
+const WebVerifyEmail = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [verifyEmailByLink, { isLoading }] = useVerifyEmailByLinkMutation();
+  const [verificationState, setVerificationState] = useState<
+    "verifying" | "success" | "failed"
+  >("verifying");
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  useEffect(() => {
+    const verifyEmail = async () => {
+      // Extract token from URL parameters
+      const token = searchParams.get("token");
+
+      if (!token) {
+        setVerificationState("failed");
+        setErrorMessage("Invalid verification link. No token found.");
+        return;
+      }
+
+      try {
+        const result = await verifyEmailByLink({ token }).unwrap();
+
+        if (result?.status === 1) {
+          setVerificationState("success");
+          // Redirect to download page after a brief delay
+          await chrome?.storage?.local.set({ token: token, isVerified: true });
+
+          navigate("/download");
+        } else {
+          setVerificationState("failed");
+          setErrorMessage(
+            result.message || "Verification failed. Please try again."
+          );
+        }
+      } catch (error: any) {
+        console.error("Email verification error:", error);
+        setVerificationState("failed");
+        setErrorMessage(
+          error?.data?.message ||
+            "The verification link is invalid or has expired. Please request a new verification link."
+        );
+      }
+    };
+
+    verifyEmail();
+  }, [searchParams, verifyEmailByLink, navigate]);
+
+  const handleResendVerification = () => {
+    // Navigate back to verification page where user can resend
+    navigate("/verify");
+  };
+
+  const handleBackToLogin = () => {
+    navigate("/");
+  };
+
+  if (verificationState === "verifying" || isLoading) {
+    return (
+      <div className='bg-[url("/web/verify-bg.svg")] bg-cover bg-center min-h-screen w-full flex items-center justify-center'>
+        <ProcessingModal
+          iconSrc="/web/loader.gif"
+          title="Verifying..."
+          description="We are verifying your account. This will only take a few seconds."
+        />
+      </div>
+    );
+  }
+
+  if (verificationState === "success") {
+    return (
+      <div className='bg-[url("/web/verify-bg.svg")] bg-cover bg-center min-h-screen w-full flex items-center justify-center'>
+        <VerificationModal
+          iconSrc="/web/email.svg"
+          title="Email Verified Successfully!"
+          description="Your email has been verified. You will be redirected to the download page shortly."
+          buttonText="Go to Download"
+          belowText=""
+          border="border-[0.51px] border-solid border-[rgba(63,126,248,0.5)]"
+          onButtonClick={() => navigate("/download")}
+        />
+      </div>
+    );
+  }
+
+  // Failed state
+  return (
+    <div className='bg-[url("/web/verify-bg.svg")] bg-cover bg-center min-h-screen w-full flex items-center justify-center'>
+      <VerificationModal
+        iconSrc="/web/failed.svg"
+        title="Verification Failed"
+        description={errorMessage}
+        buttonText="Resend Verification Link"
+        belowText="Back to Log In"
+        border="border border-solid border-red-500"
+        onButtonClick={handleResendVerification}
+        onBelowTextClick={handleBackToLogin}
+      />
+    </div>
+  );
+};
+
+export default WebVerifyEmail;

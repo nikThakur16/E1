@@ -1,0 +1,50 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+/* Hide scrollbars for all elements */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  width: 0px; /* Hide scrollbar for Chrome, Safari, Opera */
+  height: 0px;
+  display: none;
+}
+
+*::-webkit-scrollbar-track {
+  display: none;
+}
+
+*::-webkit-scrollbar-thumb {
+  display: none;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  display: none;
+}
+
+/* Specific body rules */
+body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+body::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  font-family: 'DM Sans', sans-serif;
+  overflow: auto; /* Keep overflow functionality */
+}
+
+
+

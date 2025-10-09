@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "SummarizeX - AI Audio Recorder",
+  "version": "1.0.0",
+  "description": "Professional audio recording extension with AI-powered summarization",
+  "action": {
+    "default_title": "SummarizeX Recorder"
+  },
+  "permissions": ["storage", "activeTab", "offscreen", "windows", "scripting"],
+  "optional_permissions": [],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["index.html", "popup/*", "web/*" ,"style/popup.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "minimum_chrome_version": "109"
+}
