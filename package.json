@@ -7,13 +7,16 @@
     "dev": "vite",
     "dev:web": "vite --mode web",
     "dev:extension": "vite --mode extension",
+    "dev:global": "vite --mode global",
     
-    "build": "npm run build:web && npm run build:extension",
+    "build": "npm run build:web && npm run build:extension && npm run build:global",
     "build:web": "tsc -b && vite build --mode web",
     "build:extension": "tsc -b && vite build --mode extension",
+    "build:global": "tsc -b && vite build --mode global",
     
     "preview:web": "vite preview --mode web",
     "preview:extension": "vite preview --mode extension",
+    "preview:global": "vite preview --mode global",
     "preview": "vite preview",
     
     "deploy:web": "npm run build:web && npm run deploy:vercel",
@@ -23,7 +26,7 @@
     "package:extension": "npm run build:extension && cd dist-extension && zip -r ../summarizex-extension.zip .",
     
     "lint": "eslint .",
-    "clean": "rm -rf dist-web dist-extension"
+    "clean": "rm -rf dist-web dist-extension dist"
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.2",

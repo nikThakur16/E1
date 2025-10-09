@@ -12,6 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }: ConfigEnv) => {
   const isWebBuild = mode === 'web';
   const isExtensionBuild = mode === 'extension';
+  const isGlobalBuild = mode === 'global';
   
   return {
     plugins: [
@@ -50,6 +51,21 @@ export default defineConfig(({ mode }: ConfigEnv) => {
           { src: "public/vite.svg", dest: "." },
         ],
       })] : []),
+      // Copy all files for global build
+      ...(isGlobalBuild ? [viteStaticCopy({
+        targets: [
+          { src: "public/manifest.json", dest: "." },
+          { src: "src/background.js", dest: "." },
+          { src: "src/content-script.js", dest: "." },
+          { src: "public/offscreen.js", dest: "." },
+          { src: "public/offScreen.html", dest: "." },
+          { src: "public/permissionRequest.html", dest: "." },
+          { src: "public/permissionRequest.js", dest: "." },
+          { src: "public/popup/**", dest: "popup" },
+          { src: "public/web/**", dest: "web" },
+          { src: "public/vite.svg", dest: "." },
+        ],
+      })] : []),
     ],
     server: {
       host: "0.0.0.0",
@@ -60,12 +76,17 @@ export default defineConfig(({ mode }: ConfigEnv) => {
       rollupOptions: {
         input: isWebBuild 
           ? resolve(__dirname, "web.html")
+          : isGlobalBuild
+          ? {
+              popup: resolve(__dirname, "index.html"),
+              web: resolve(__dirname, "web.html")
+            }
           : {
               popup: resolve(__dirname, "index.html"),
               web: resolve(__dirname, "web.html")
             },
       },
-      outDir: isWebBuild ? "dist-web" : "dist-extension",
+      outDir: isWebBuild ? "dist-web" : isGlobalBuild ? "dist" : "dist-extension",
       emptyOutDir: true,
       minify: mode === 'production' ? 'terser' as const : false,
       sourcemap: mode === 'development',
