@@ -338,9 +338,9 @@ const router = createHashRouter([
       {
         path: "/popup/record",
         element: (
-          <ProtectedRoute>
+  
             <RecordSection />
-          </ProtectedRoute>
+
         ),
       },
       {
