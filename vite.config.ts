@@ -91,6 +91,6 @@ export default defineConfig(({ mode }: ConfigEnv) => {
       minify: mode === 'production' ? 'terser' as const : false,
       sourcemap: mode === 'development',
     },
-    base: isWebBuild ? '/' : '/',
+    base: isWebBuild ? '/web.html' : '/',
   };
 });
