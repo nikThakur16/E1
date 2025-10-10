@@ -8,6 +8,7 @@ import DropdownMenu from "../components/popup/DropdownMenu";
 import DownloadExtensionModal from "../components/popup/DownloadExtensionModal";
 import { useGetSummaryWithActionsMutation } from "../store/api/authApi";
 import { setSummaryFromApiResponse, setApiError, clearSummary } from "../store/slices/summarySlice";
+import { setLectureNotesData, setPdfViewData } from "../store/slices/navigationSlice";
 import { type KeyPoint } from "../store/slices/summarySlice";
 import { useUpload } from "../context/UploadContext";
 import Loader from "../components/popup/Loader";
@@ -157,8 +158,14 @@ export default function SummaryPage() {
         tag: summary?.tag || "Document"
       };
       
-      // Navigate to PDF view page
-      navigate('/popup/pdf-view', { state: { pdfData } });
+      // Store PDF data in Redux and navigate
+      console.log("Storing PDF data in Redux:", pdfData);
+      
+      dispatch(setPdfViewData({
+        pdfData: pdfData
+      }));
+      
+      navigate('/popup/pdf-view');
       
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -268,18 +275,18 @@ export default function SummaryPage() {
 
       console.log("API Response:", response);
 
-      // Navigate to LectureNotePage with the response data
-      console.log("Navigating to lecture-notes with state:", {
+      // Store data in Redux and navigate
+      console.log("Storing lecture notes data in Redux:", {
         apiResponse: response,
         actionTitle: action.title
       });
       
-      navigate('/popup/lecture-notes', {
-        state: {
-          apiResponse: response,
-          actionTitle: action.title
-        }
-      });
+      dispatch(setLectureNotesData({
+        apiResponse: response,
+        actionTitle: action.title
+      }));
+      
+      navigate('/popup/lecture-notes');
 
     } catch (error) {
       console.error("Error calling summary with actions API:", error);

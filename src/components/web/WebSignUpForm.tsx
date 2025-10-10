@@ -70,7 +70,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
         });
         
         // Redirect to verification page with email in state
-        onSignUpSuccess(values.email  );
+        onSignUpSuccess(values.email);
         console.log("Redirecting to verification page");
       } else {
         // Handle API error response

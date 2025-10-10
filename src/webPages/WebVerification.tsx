@@ -1,19 +1,30 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import VerificationModal from "../components/web/VerificationModal";
-import { useResendVerificationLinkMutation, useForgotPasswordMutation } from "../store/api/authApi";
+import { useResendVerificationLinkMutation, useForgotPasswordMutation, useVerifyEmailByLinkMutation } from "../store/api/authApi";
 import toast from 'react-hot-toast';
 
 const WebVerification = () => {
   const location = useLocation();
   const [resendVerificationLink, { isLoading: isResending }] = useResendVerificationLinkMutation();
   const [forgotPassword, { isLoading: isResendingReset }] = useForgotPasswordMutation();
+  const [verifyEmailByLink, { isLoading: isVerifying }] = useVerifyEmailByLinkMutation();
   const [email, setEmail] = useState("");
   const [verificationType, setVerificationType] = useState<'signup' | 'password-reset'>('signup');
+  const [isVerified, setIsVerified] = useState(false);
   const navigate = useNavigate();
 
   // Get email and verification type from location state or localStorage
   useEffect(() => {
+    // Check if this is a verification link click (has token in URL)
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      // This is a verification link click, handle verification
+      handleEmailVerification(token);
+      return;
+    }
 
     // Try to get email and type from location state first
     const stateEmail = location.state?.email;
@@ -33,6 +44,97 @@ const WebVerification = () => {
       }
     }
   }, [location.state]);
+
+  // Handle email verification when user clicks verification link
+  const handleEmailVerification = async (token: string) => {
+    try {
+      const result = await verifyEmailByLink({ token }).unwrap();
+      console.log("Email verification response:", result);
+      
+      if (result.status === 1) {
+        setIsVerified(true);
+        
+        // Check if the response includes user data and token for automatic login
+        if (result.data?.token || result.user?.token) {
+          const userToken = result.data?.token || result.user?.token;
+          const userData = result.data?.user || result.user;
+          
+          console.log("Auto-login after verification:", { userToken, userData });
+          
+          // Store credentials just like WebSignInForm does
+          if (chrome?.storage?.local) {
+            await chrome.storage.local.set({ 
+              token: userToken, 
+              user: userData,
+              loggedIn: true 
+            });
+          } else {
+            // For local development - try to communicate with extension
+            try {
+              // Method 1: Try to send message to extension if it's loaded
+              if (chrome?.runtime?.id) {
+                await chrome.runtime.sendMessage({
+                  type: 'STORE_LOGIN_DATA',
+                  data: {
+                    token: userToken,
+                    user: userData,
+                    loggedIn: true
+                  }
+                });
+                console.log('Verification login data sent to extension');
+              } else {
+                // Method 2: Use postMessage to communicate with extension
+                window.postMessage({
+                  type: 'EXTENSION_LOGIN_DATA',
+                  data: {
+                    token: userToken,
+                    user: userData,
+                    loggedIn: true
+                  }
+                }, '*');
+                console.log('Verification login data posted to extension via postMessage');
+              }
+            } catch (error) {
+              console.log('Extension not available, using localStorage fallback');
+              localStorage.setItem("token", userToken);
+              localStorage.setItem("user", JSON.stringify(userData));
+              localStorage.setItem("loggedIn", "true");
+            }
+          }
+          
+          toast.success("Email verified and logged in successfully! Redirecting...", {
+            duration: 3000,
+            position: 'top-center',
+          });
+          
+          // Redirect to download page (same as WebSignInForm)
+          setTimeout(() => {
+            navigate("/download");
+          }, 1000);
+        } else {
+          // No auto-login data, redirect to login page
+          toast.success("Email verified successfully! Redirecting to login...", {
+            duration: 3000,
+            position: 'top-center',
+          });
+          
+          // Clear stored email
+          localStorage.removeItem('signupEmail');
+          
+          // Redirect to login page after successful verification
+          setTimeout(() => {
+            navigate("/");
+          }, 2000);
+        }
+      } else {
+        toast.error(result.message || "Email verification failed");
+      }
+    } catch (error: any) {
+      console.error("Email verification error:", error);
+      const errorMessage = error?.data?.message || "Email verification failed";
+      toast.error(errorMessage);
+    }
+  };
 
   // Debug effect to see when verificationType changes
   useEffect(() => {
@@ -103,6 +205,18 @@ const WebVerification = () => {
   const getModalContent = () => {
     console.log("🎨 Getting modal content for type:", verificationType);
     
+    // Show success state if email was verified
+    if (isVerified) {
+      return {
+        iconSrc: "/web/verify-bg.svg", // You can use a success icon here
+        title: "Email Verified!",
+        description: "Your email has been successfully verified and you're now logged in. Redirecting...",
+        buttonText: "Continue",
+        belowText: "",
+        border: "border-[0.51px] border-solid border-[rgba(34,197,94,0.5)]"
+      };
+    }
+    
     if (verificationType === 'password-reset') {
       return {
         iconSrc: "/web/email.svg",
@@ -136,8 +250,8 @@ const WebVerification = () => {
         belowText={modalContent.belowText}
         onBelowTextClick={handleBelowTextClick}
         border={modalContent.border}
-        onButtonClick={verificationType === 'password-reset' ? handleResendResetLink : handleResendVerificationLink}
-        disabled={isResending || isResendingReset}
+        onButtonClick={isVerified ? handleBelowTextClick : (verificationType === 'password-reset' ? handleResendResetLink : handleResendVerificationLink)}
+        disabled={isResending || isResendingReset || isVerifying}
       />
     </div>
   );

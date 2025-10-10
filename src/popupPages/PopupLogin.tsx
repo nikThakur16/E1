@@ -7,18 +7,18 @@ export default function PopupLogin() {
 
   const handleLoginRedirect = () => {
     if (typeof chrome !== "undefined" && chrome?.tabs) {
-      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/web.html" });
+      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/" });
     } else {
       // Fallback for dev (open in same window)
-      window.location.href = "https://e1-kappa.vercel.app/web.html";
+      window.location.href = "https://e1-kappa.vercel.app/";
     }
   };
   const handleSignUpRedirect = () => {
     if (typeof chrome !== "undefined" && chrome?.tabs) {
-      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/web.html#/signup" });
+      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/#/signup" });
     } else {
       // Fallback for dev (open in same window)
-      window.location.href = "https://e1-kappa.vercel.app/web.html#/signup";
+      window.location.href = "https://e1-kappa.vercel.app/#/signup";
     }
   }
 

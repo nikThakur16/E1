@@ -1,5 +1,9 @@
 
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { type RootState } from '../store';
+import { clearPdfViewData } from '../store/slices/navigationSlice';
 import jsPDF from 'jspdf';
 import { formatFileSize } from '../helper/formatSize';
 import BackButton from '../components/popup/BackButton';
@@ -20,15 +24,38 @@ interface PDFViewPageProps {
 export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
+  const { pdfViewData } = useSelector((state: RootState) => state.navigation);
   
-  // Normalize incoming data from props, router state, or raw API response
-  const rawState = location.state as any;
-  const raw = propPdfData || rawState?.pdfData || rawState?.apiResponse || rawState?.data || rawState?.currentSummary;
-  console.log(raw,"09090")
+  const [pdfData, setPdfData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    console.log("=== PDFViewPage useEffect triggered ===");
+    console.log("PDF view data from Redux:", pdfViewData);
+    console.log("Prop PDF data:", propPdfData);
+    console.log("=====================================");
+    
+    if (pdfViewData?.pdfData) {
+      console.log("Using PDF data from Redux");
+      setPdfData(pdfViewData.pdfData);
+      setIsLoading(false);
+    } else if (propPdfData) {
+      console.log("Using prop PDF data");
+      setPdfData(propPdfData);
+      setIsLoading(false);
+    } else {
+      console.log("No PDF data found");
+      setIsLoading(false);
+    }
+  }, [pdfViewData, propPdfData]);
 
-
-
-  const pdfData = raw;
+  // Cleanup function to clear Redux data when component unmounts
+  useEffect(() => {
+    return () => {
+      dispatch(clearPdfViewData());
+    };
+  }, [dispatch]);
 
   const handleBack = () => {
     navigate(-1);
@@ -112,6 +139,30 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
       console.error("Failed to copy to clipboard:", error);
     }
   };
+
+  // Show loading state while waiting for data
+  if (isLoading) {
+    return (
+      <div className="bg-gray-100 flex flex-col items-center justify-center py-6 px-8">
+        <div className="w-full max-w-4xl">
+          <button 
+            onClick={handleBack} 
+            className="flex items-center text-gray-600 hover:text-gray-800 mb-4"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </button>
+        </div>
+        
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-gray-600">Loading PDF data...</div>
+        </div>
+      </div>
+    );
+  }
 
   // If no PDF data is available, show error message
   if (!pdfData) {

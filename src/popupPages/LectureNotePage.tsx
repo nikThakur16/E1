@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { type RootState } from "../store";
+import { clearLectureNotesData, setPdfViewData } from "../store/slices/navigationSlice";
 import Heading from "../components/popup/Heading";
 import DropdownMenu from "../components/popup/DropdownMenu";
 import BackButton from "../components/popup/BackButton";
@@ -21,6 +24,9 @@ interface ParsedContent {
 export default function LectureNotePage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { lectureNotesData } = useSelector((state: RootState) => state.navigation);
+  
   const [data, setData] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [content, setContent] = useState<ParsedContent[]>([]);
@@ -158,8 +164,14 @@ export default function LectureNotePage() {
         tag: "Lecture Notes"
       };
       
-      // Navigate to PDF view page
-      navigate('/pdf-view', { state: { pdfData } });
+      // Store PDF data in Redux and navigate
+      console.log("Storing PDF data in Redux:", pdfData);
+      
+      dispatch(setPdfViewData({
+        pdfData: pdfData
+      }));
+      
+      navigate('/popup/pdf-view');
       
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -304,107 +316,73 @@ export default function LectureNotePage() {
     );
   };
 
-  useEffect(() => {
-    console.log("LectureNotePage useEffect triggered");
-    console.log("Location state:", location.state);
+  // Process API response data
+  const processApiResponse = (apiResponse: any, actionTitle: string) => {
+    console.log("Processing API response data...");
+    setIsLoading(true);
     
-    // Check if we have API response data from navigation state
-    if (location.state?.apiResponse) {
-      console.log("Processing API response data...");
-      setIsLoading(true);
-      const apiResponse = location.state.apiResponse;
-      const actionTitle = location.state.actionTitle;
-
-      console.log("Received API Response:", apiResponse);
-      console.log("Action Title:", actionTitle);
-      
-      // Extract the API title from action_details
-      if (apiResponse?.data?.action_details?.title) {
-        setApiTitle(apiResponse.data.action_details.title);
-      }
-      
-      // Extract the content from API response - Updated to match your API structure
-      let responseText = "";
-      
-      // Try different paths to find the content based on your API response structure
-      if (apiResponse?.data?.action_result?.response_plain_text) {
-        responseText = apiResponse?.data?.action_result?.response_plain_text;
-      } else if (apiResponse?.data?.action_result?.response_body?.content) {
-        responseText = apiResponse.data.action_result.response_body.content;
-      } else if (apiResponse?.data?.content) {
-        responseText = apiResponse.data.content;
-      } else if (apiResponse?.content) {
-        responseText = apiResponse.content;
-      } else if (typeof apiResponse?.data === 'string') {
-        responseText = apiResponse.data;
-      } else if (typeof apiResponse === 'string') {
-        responseText = apiResponse;
-      } else {
-        // Fallback: try to find any text content in the response
-        responseText = JSON.stringify(apiResponse, null, 2);
-      }
-      
-      console.log("Parsed response text:", responseText);
-      
-      // Parse the response content
-      const parsedContent = parseContentFromResponse(responseText);
-      console.log("Parsed content:", parsedContent);
-      setContent(parsedContent);
-      setData(apiResponse);
-      setIsLoading(false);
+    console.log("Received API Response:", apiResponse);
+    console.log("Action Title:", actionTitle);
+    
+    // Extract the API title from action_details
+    if (apiResponse?.data?.action_details?.title) {
+      setApiTitle(apiResponse.data.action_details.title);
+    }
+    
+    // Extract the content from API response - Updated to match your API structure
+    let responseText = "";
+    
+    // Try different paths to find the content based on your API response structure
+    if (apiResponse?.data?.action_result?.response_plain_text) {
+      responseText = apiResponse?.data?.action_result?.response_plain_text;
+    } else if (apiResponse?.data?.action_result?.response_body?.content) {
+      responseText = apiResponse.data.action_result.response_body.content;
+    } else if (apiResponse?.data?.content) {
+      responseText = apiResponse.data.content;
+    } else if (apiResponse?.content) {
+      responseText = apiResponse.content;
+    } else if (typeof apiResponse?.data === 'string') {
+      responseText = apiResponse.data;
+    } else if (typeof apiResponse === 'string') {
+      responseText = apiResponse;
     } else {
-      console.log("No API response data found, showing empty state");
-      // No API response - show empty state
+      // Fallback: try to find any text content in the response
+      responseText = JSON.stringify(apiResponse, null, 2);
+    }
+    
+    console.log("Parsed response text:", responseText);
+    
+    // Parse the response content
+    const parsedContent = parseContentFromResponse(responseText);
+    console.log("Parsed content:", parsedContent);
+    setContent(parsedContent);
+    setData(apiResponse);
+    setIsLoading(false);
+  };
+
+  // Simple useEffect that uses Redux data
+  useEffect(() => {
+    console.log("=== LectureNotePage useEffect triggered ===");
+    console.log("Lecture notes data from Redux:", lectureNotesData);
+    console.log("==========================================");
+    
+    if (lectureNotesData?.apiResponse) {
+      processApiResponse(lectureNotesData.apiResponse, lectureNotesData.actionTitle);
+    } else {
+      console.log("No lecture notes data found in Redux, showing empty state");
       setContent([]);
       setIsLoading(false);
     }
-  }, [location.state?.apiResponse, location.state?.actionTitle]);
+  }, [lectureNotesData]);
 
-  // Additional useEffect to handle cases where location.state might not be immediately available
+  // Cleanup function to clear Redux data when component unmounts
   useEffect(() => {
-    console.log("LectureNotePage mount useEffect triggered");
-    console.log("Current content length:", content.length);
-    console.log("Current location state:", location.state);
-    
-    // If we don't have content but we have location state, process it
-    if (content.length === 0 && location.state?.apiResponse) {
-      console.log("Processing data on mount...");
-      const apiResponse = location.state.apiResponse;
-      const actionTitle = location.state.actionTitle;
+    return () => {
+      dispatch(clearLectureNotesData());
+    };
+  }, [dispatch]);
 
-      // Extract the API title from action_details
-      if (apiResponse?.data?.action_details?.title) {
-        setApiTitle(apiResponse.data.action_details.title);
-      }
-      
-      // Extract the content from API response
-      let responseText = "";
-      
-      if (apiResponse?.data?.action_result?.response_plain_text) {
-        responseText = apiResponse?.data?.action_result?.response_plain_text;
-      } else if (apiResponse?.data?.action_result?.response_body?.content) {
-        responseText = apiResponse.data.action_result.response_body.content;
-      } else if (apiResponse?.data?.content) {
-        responseText = apiResponse.data.content;
-      } else if (apiResponse?.content) {
-        responseText = apiResponse.content;
-      } else if (typeof apiResponse?.data === 'string') {
-        responseText = apiResponse.data;
-      } else if (typeof apiResponse === 'string') {
-        responseText = apiResponse;
-      } else {
-        responseText = JSON.stringify(apiResponse, null, 2);
-      }
-      
-      console.log("Mount - Parsed response text:", responseText);
-      
-      // Parse the response content
-      const parsedContent = parseContentFromResponse(responseText);
-      console.log("Mount - Parsed content:", parsedContent);
-      setContent(parsedContent);
-      setData(apiResponse);
-    }
-  }, []); // Run only on mount
+  console.log("99009900",content)
 
   if (isLoading) {
     return (

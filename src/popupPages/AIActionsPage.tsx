@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { type RootState } from '../store';
+import { setLectureNotesData } from '../store/slices/navigationSlice';
 import { useGetAIActionsCategoriesQuery, useGetAIActionsQuery, useGetSummaryWithActionsMutation } from '../store/api/authApi';
 import Heading from '../components/popup/Heading';
 import BackButton from '../components/popup/BackButton';
@@ -24,6 +27,7 @@ interface AIAction {
 const AIActionsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
 
   // Get passed data from navigation state
   const { transcription, summaryId } = location.state || {};
@@ -47,7 +51,7 @@ const AIActionsPage: React.FC = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [actionsCache, setActionsCache] = useState<{[key: number]: AIAction[]}>({});
-  const [loadingActionId, setLoadingActionId] = useState<number | null>(null);
+  const [loadingAction, setLoadingAction] = useState<boolean>(false);
 
   // Fetch AI Actions for the active category
   const { data: aiActionsData, isLoading: isFetchingAIActions, error: aiActionsError } = useGetAIActionsQuery(activeCategoryId!, {
@@ -105,39 +109,65 @@ const AIActionsPage: React.FC = () => {
   // Handle action click - same functionality as SummaryPage
   const handleActionClick = async (action: AIAction) => {
     try {
-      if (!summaryId || !transcription?.text) {
+      console.log("=== Action Click Debug ===");
+      console.log("Summary ID:", summaryId);
+      console.log("Transcription:", transcription);
+      console.log("Transcription type:", typeof transcription);
+      console.log("Transcription.text:", transcription?.text);
+      console.log("========================");
+      
+      if (!summaryId || !transcription) {
         console.error("Missing required data for API call");
         return;
       }
+      
+      // Handle different transcription formats
+      let transcriptionText = '';
+      if (typeof transcription === 'string') {
+        transcriptionText = transcription;
+      } else if (transcription?.text) {
+        transcriptionText = transcription.text;
+      } else if (transcription?.content) {
+        transcriptionText = transcription.content;
+      } else {
+        console.error("Unable to extract transcription text");
+        return;
+      }
 
-      setLoadingActionId(action.id);
+      setLoadingAction(true);
 
       console.log("Calling API with:", {
         summary_id: summaryId,
         action_id: action.id,
-        ai_content: transcription.text
+        ai_content: transcriptionText
       });
 
       const response = await getSummaryWithActions({
         summary_id: summaryId,
         action_id: action.id,
-        ai_content: transcription.text
+        ai_content: transcriptionText
       }).unwrap();
 
       console.log("API Response:", response);
+      console.log("Action Title:", action.title);
 
-      // Navigate to LectureNotePage with the response data
-      navigate('/lecture-notes', {
-        state: {
-          apiResponse: response,
-          actionTitle: action.title
-        }
+      // Store data in Redux and navigate
+      console.log("Storing lecture notes data in Redux:", {
+        apiResponse: response,
+        actionTitle: action.title
       });
+      
+      dispatch(setLectureNotesData({
+        apiResponse: response,
+        actionTitle: action.title
+      }));
+      
+      navigate('/popup/lecture-notes');
 
     } catch (error) {
       console.error("Error calling summary with actions API:", error);
     } finally {
-      setLoadingActionId(null);
+      setLoadingAction(false);
     }
   };
 
@@ -216,9 +246,7 @@ const AIActionsPage: React.FC = () => {
             <div
               key={action.id}
               onClick={() => handleActionClick(action)}
-              className={`bg-white rounded-2xl p-6 hover:border-[#BDD4FF] transition-colors cursor-pointer ${
-                loadingActionId === action.id ? 'opacity-50 pointer-events-none' : ''
-              }`}
+              className={`bg-white rounded-2xl p-6 hover:border-[#BDD4FF] transition-colors cursor-pointe`}
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -228,9 +256,7 @@ const AIActionsPage: React.FC = () => {
                   <p className="text-[15px] font-[400] w-[75%] text-[#6B7280] leading-[1.4]">
                     {action.description}
                   </p>
-                  {loadingActionId === action.id && (
-                    <p className="text-[13px] text-[#3F7EF8] mt-2">Processing...</p>
-                  )}
+                
                 </div>
                 
                 {/* Favorite Star */}
@@ -258,6 +284,10 @@ const AIActionsPage: React.FC = () => {
           </div>
         )}
       </div>
+      {loadingAction && (
+        <Loader isLoading={loadingAction} />
+      )}
+    
     </div>
   );
 };

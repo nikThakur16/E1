@@ -32,8 +32,15 @@ console.log("token",token);
             return;
         }
         if (result.status === 1) {
-            toast.success("Password reset successfully");
-            navigate("/");      
+            toast.success("Password reset successfully! Redirecting to login...", {
+              duration: 3000,
+              position: 'top-center',
+            });
+            
+            // Redirect to login page after successful password reset
+            setTimeout(() => {
+              navigate("/");
+            }, 1000);
         } else {
             toast.error(result.message || "Failed to reset password");
         }
