@@ -9,14 +9,14 @@
     "dev:extension": "vite --mode extension ",
     "dev:global": "vite --mode global ",
     
-    "build": "npm run build:web && npm run build:extension && npm run build:global ",
+    "build": "npm run build:web && npm run build:extension && npm run build:global --watch",
     "build:web": "tsc -b && vite build --mode web",
-    "build:extension": "tsc -b && vite build --mode extension  ",
-    "build:global": "tsc -b && vite build --mode global  ",
+    "build:extension": "tsc -b && vite build --mode extension --watch ",
+    "build:global": "tsc -b && vite build --mode global --watch ",
     
-    "preview:web": "vite preview --mode web ",
-    "preview:extension": "vite preview --mode extension ",
-    "preview:global": "vite preview --mode global ",
+    "preview:web": "vite preview --mode web --watch",
+    "preview:extension": "vite preview --mode extension --watch",
+    "preview:global": "vite preview --mode global --watch",
     "preview": "vite preview",
     
     "deploy:web": "npm run build:web && npm run deploy:vercel",
