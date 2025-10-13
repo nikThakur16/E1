@@ -112,50 +112,55 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
         email: userInfo.email,
         picture: userInfo.picture,
       };
-      console.log("1122",user,accessToken)
+      console.log("Google user info:", user, accessToken);
 
-// ✅ Save to extension storage
-if (chrome?.storage?.local) {
-  await chrome.storage.local.set({ 
-    token: accessToken, 
-    loggedIn: true 
-  });
-} else {
-  // For local development - try to communicate with extension
-  try {
-    // Method 1: Try to send message to extension if it's loaded
-    if (chrome?.runtime?.id) {
-      await chrome.runtime.sendMessage({
-        type: 'STORE_LOGIN_DATA',
-        data: {
-          token: accessToken,
-          loggedIn: true
+      // ✅ Save to extension storage with user data
+      if (chrome?.storage?.local) {
+        await chrome.storage.local.set({ 
+          token: accessToken, 
+          user: user,
+          loggedIn: true 
+        });
+        console.log('Google signup data stored directly in extension storage');
+      } else {
+        // For local development - try to communicate with extension
+        try {
+          // Method 1: Try to send message to extension if it's loaded
+          if (chrome?.runtime?.id) {
+            await chrome.runtime.sendMessage({
+              type: 'STORE_LOGIN_DATA',
+              data: {
+                token: accessToken,
+                user: user,
+                loggedIn: true
+              }
+            });
+            console.log('Google signup data sent to extension via runtime message');
+          } else {
+            // Method 2: Use postMessage to communicate with extension
+            window.postMessage({
+              type: 'EXTENSION_LOGIN_DATA',
+              data: {
+                token: accessToken,
+                user: user,
+                loggedIn: true
+              }
+            }, '*');
+            console.log('Google signup data posted to extension via postMessage');
+          }
+        } catch (error) {
+          console.log('Extension not available, using localStorage fallback');
+          localStorage.setItem("token", accessToken);
+          localStorage.setItem("user", JSON.stringify(user));
+          localStorage.setItem("loggedIn", "true");
         }
-      });
-      console.log('Login data sent to extension');
-    } else {
-      // Method 2: Use postMessage to communicate with extension
-      window.postMessage({
-        type: 'EXTENSION_LOGIN_DATA',
-        data: {
-          token: accessToken,
-          loggedIn: true
-        }
-      }, '*');
-      console.log('Login data posted to extension via postMessage');
-    }
-  } catch (error) {
-    console.log('Extension not available, using localStorage fallback');
-    localStorage.setItem("token", accessToken);
-    localStorage.setItem("loggedIn", "true");
-  }
-}
+      }
     // ✅ Show success toast
     toast.success("Google signup successful! Welcome to SummarizeX.", {
       duration: 3000,
       position: 'top-center',
     });
-
+ 
 // ✅ Redirect to download page with slight delay to show toast
 setTimeout(() => {
   navigate("/download");
