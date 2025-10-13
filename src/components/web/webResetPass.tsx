@@ -102,17 +102,17 @@ console.log("token",token);
           <button
             type="button"
             onClick={() => setShowPassword(v => !v)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-1 cursor-pointer"
+            className="absolute right-4 top-1/2 transform -translate-y-1/2  cursor-pointer"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? (
-              <svg className=" absolute top-1/2" width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg  width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M15 9l-6 6" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round"/>
                 <circle cx="12" cy="12" r="3" stroke="#4B5563" strokeWidth="1.7"/>
               </svg>
             ) : (
-              <svg className="absolute top-1/2" width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg  width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
                 <circle cx="12" cy="12" r="3" stroke="#4B5563" strokeWidth="1.7"/>
               </svg>
