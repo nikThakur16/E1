@@ -113,25 +113,41 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
         picture: userInfo.picture,
       };
 
-      // ✅ Store in chrome?.storage?.local (works across popup, background, content scripts)
+      // ✅ Save to extension storage (same as regular signup)
       if (chrome?.storage?.local) {
-        await chrome?.storage?.local.set({
-          token: accessToken,
-          user,
-          loggedIn: true,
+        await chrome.storage.local.set({ 
+          token: accessToken, 
+          loggedIn: true 
         });
-        console.log('Google signup data stored in chrome storage');
       } else {
-        // For web browser - use localStorage
-        console.log('Chrome storage not available, using localStorage');
-        localStorage.setItem("token", accessToken);
-        localStorage.setItem("user", JSON.stringify(user));
-        localStorage.setItem("loggedIn", "true");
-        console.log('Google signup data stored in localStorage:', {
-          token: accessToken,
-          user,
-          loggedIn: true
-        });
+        // For local development - try to communicate with extension
+        try {
+          // Method 1: Try to send message to extension if it's loaded
+          if (chrome?.runtime?.id) {
+            await chrome.runtime.sendMessage({
+              type: 'STORE_LOGIN_DATA',
+              data: {
+                token: accessToken,
+                loggedIn: true
+              }
+            });
+            console.log('Google signup data sent to extension');
+          } else {
+            // Method 2: Use postMessage to communicate with extension
+            window.postMessage({
+              type: 'EXTENSION_LOGIN_DATA',
+              data: {
+                token: accessToken,
+                loggedIn: true
+              }
+            }, '*');
+            console.log('Google signup data posted to extension via postMessage');
+          }
+        } catch (error) {
+          console.log('Extension not available, using localStorage fallback');
+          localStorage.setItem("token", accessToken);
+          localStorage.setItem("loggedIn", "true");
+        }
       }
 
       // ✅ Show success toast

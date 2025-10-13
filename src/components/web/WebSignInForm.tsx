@@ -141,12 +141,11 @@ export default function WebSignInForm() {
         picture: userInfo.picture,
       };
 
-      // ✅ Store in chrome?.storage?.local (works across popup, background, content scripts)
+      // ✅ Save to extension storage (same as regular login)
       if (chrome?.storage?.local) {
-        await chrome?.storage?.local.set({
-          token: accessToken,
-          user,
-          loggedIn: true,
+        await chrome.storage.local.set({ 
+          token: accessToken, 
+          loggedIn: true 
         });
       } else {
         // For local development - try to communicate with extension
@@ -157,7 +156,6 @@ export default function WebSignInForm() {
               type: 'STORE_LOGIN_DATA',
               data: {
                 token: accessToken,
-                user: user,
                 loggedIn: true
               }
             });
@@ -168,7 +166,6 @@ export default function WebSignInForm() {
               type: 'EXTENSION_LOGIN_DATA',
               data: {
                 token: accessToken,
-                user: user,
                 loggedIn: true
               }
             }, '*');
@@ -177,7 +174,6 @@ export default function WebSignInForm() {
         } catch (error) {
           console.log('Extension not available, using localStorage fallback');
           localStorage.setItem("token", accessToken);
-          localStorage.setItem("user", JSON.stringify(user));
           localStorage.setItem("loggedIn", "true");
         }
       }
