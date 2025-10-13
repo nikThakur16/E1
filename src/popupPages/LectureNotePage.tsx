@@ -33,6 +33,7 @@ export default function LectureNotePage() {
   const [expandedSections, setExpandedSections] = useState<{ [key: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [apiTitle, setApiTitle] = useState<string>("Lecture Notes");
   
   // Normalize headings by removing leading Roman numerals or numeric prefixes
@@ -286,6 +287,16 @@ export default function LectureNotePage() {
 
   // Handle back navigation
   const handleBack = () => {
+    if (isNavigating) {
+      console.log("LectureNotePage - Navigation already in progress, ignoring click");
+      return;
+    }
+    
+    console.log("LectureNotePage - Navigating back");
+    console.log("Current lecture notes data:", lectureNotesData);
+    console.log("Current content:", content);
+    
+    setIsNavigating(true);
     // Go back to Summary page retaining previous Redux state
     navigate(-1);
   };
@@ -364,9 +375,14 @@ export default function LectureNotePage() {
   useEffect(() => {
     console.log("=== LectureNotePage useEffect triggered ===");
     console.log("Lecture notes data from Redux:", lectureNotesData);
+    console.log("Current content state:", content);
     console.log("==========================================");
     
+    // Reset navigation state when data changes
+    setIsNavigating(false);
+    
     if (lectureNotesData?.apiResponse) {
+      console.log("Processing lecture notes data from Redux");
       processApiResponse(lectureNotesData.apiResponse, lectureNotesData.actionTitle);
     } else {
       console.log("No lecture notes data found in Redux, showing empty state");
@@ -375,12 +391,8 @@ export default function LectureNotePage() {
     }
   }, [lectureNotesData]);
 
-  // Cleanup function to clear Redux data when component unmounts
-  useEffect(() => {
-    return () => {
-      dispatch(clearLectureNotesData());
-    };
-  }, [dispatch]);
+  // Note: Removed automatic lecture notes data clearing on unmount to preserve data during navigation
+  // Lecture notes data will be cleared when explicitly navigating away or when new data is generated
 
   console.log("99009900",content)
 

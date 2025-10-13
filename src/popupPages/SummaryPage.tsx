@@ -317,14 +317,32 @@ export default function SummaryPage() {
           const res = await chrome.storage.local.get('currentSummary');
           const stored = res?.currentSummary;
           if (stored) {
+            console.log('Rehydrating summary from storage:', stored);
             dispatch(setSummaryFromApiResponse(stored));
           }
         }
       } catch (e) {
-        console.log('rehydrate summary failed');
+        console.log('rehydrate summary failed:', e);
       }
     })();
   }, []);
+
+  // Additional useEffect to handle data restoration when component mounts
+  useEffect(() => {
+    console.log('SummaryPage mounted - currentSummary:', currentSummary);
+    if (!currentSummary && chrome?.storage?.local) {
+      console.log('No currentSummary found, attempting to restore from storage');
+      chrome.storage.local.get('currentSummary').then(res => {
+        const stored = res?.currentSummary;
+        if (stored) {
+          console.log('Found stored summary, restoring:', stored);
+          dispatch(setSummaryFromApiResponse(stored));
+        }
+      }).catch(e => {
+        console.log('Failed to restore from storage:', e);
+      });
+    }
+  }, [currentSummary, dispatch]);
 
   // Display error if any
   const displayError = localError || apiError || error;

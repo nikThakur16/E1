@@ -86,7 +86,6 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
       if (error.data) {
         errorMessage = error.data.message || error.data.error || errorMessage;
       }
-      
       setFieldError("general", errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -94,24 +93,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
     }
   };
 
-  const handleResendVerification = async (email: string) => {
-    try {
-      const result = await resendVerification(email).unwrap();
-      
-      if (result?.status === 1) {
-        toast.success("Verification email sent again! Please check your inbox.", {
-          duration: 4000,
-          position: 'top-center',
-        });
-      } else {
-        toast.error(result?.message || "Failed to resend verification email");
-      }
-    } catch (error: any) {
-      console.error("Resend verification error:", error);
-      const errorMessage = error?.data?.message || "Failed to resend verification email";
-      toast.error(errorMessage);
-    }
-  };
+ 
 
   return (
     <div className="w-full px-6 md:px-12 py-16 bg-white rounded-[28px] shadow p-8">
@@ -244,6 +226,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
                 name="email"
                 type="email"
                 placeholder="Email Address"
+                autoComplete="off"
                 className={`w-full pl-16 pr-4 py-3 border font-[400] text-[14px] text-[rgba(75, 85, 99, 0.6)] mb-2 border-gray-300 rounded-full ${
                   errors.email && touched.email
                     ? "border-red-300"
@@ -276,6 +259,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
               <Field
                 name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
                 placeholder="Password"
                 className={`w-full pl-16 pr-4 py-3 border font-[400] text-[14px] text-[rgba(75, 85, 99, 0.6)] mb-2 border-gray-300 rounded-full ${
                   errors.password && touched.password
@@ -317,6 +301,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
                 height="22"
                 viewBox="0 0 23 22"
                 fill="none"
+                
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <path
@@ -329,6 +314,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
                 name="confirmPassword"
                 type={showConfirm ? "text" : "password"}
                 placeholder="Confirm Password"
+                autoComplete="new-password"
                 className={`w-full pl-16 pr-4 py-3 border font-[400] text-[14px] text-[rgba(75, 85, 99, 0.6)] mb-2 border-gray-300 rounded-full ${
                   errors.confirmPassword && touched.confirmPassword
                     ? "border-red-300"
@@ -340,7 +326,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
                 onClick={() => setShowConfirm(v => !v)}
                 className="absolute right-[2%] top-[42%] -translate-y-1/2 p-1 cursor-pointer"
                 aria-label={showConfirm ? "Hide password" : "Show password"}
-              >
+                >
                 {showConfirm ? (
                   <svg width="23" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
@@ -368,19 +354,6 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
               disabled={isSubmitting}
             />
 
-            {/* Resend Verification Button - Show after successful signup */}
-            {values.email && (
-              <div className="text-center mt-4">
-                <button
-                  type="button"
-                  onClick={() => handleResendVerification(values.email)}
-                  disabled={isResending}
-                  className="text-[#3F7EF8] text-[14px] font-[500] hover:underline disabled:opacity-50 cursor-pointer"
-                >
-                  {isResending ? "Sending..." : "Resend Verification Email"}
-                </button>
-              </div>
-            )}
           </Form>
         )}
       </Formik>

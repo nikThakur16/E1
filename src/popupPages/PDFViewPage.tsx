@@ -29,12 +29,16 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
   
   const [pdfData, setPdfData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
   
   useEffect(() => {
     console.log("=== PDFViewPage useEffect triggered ===");
     console.log("PDF view data from Redux:", pdfViewData);
     console.log("Prop PDF data:", propPdfData);
     console.log("=====================================");
+    
+    // Reset navigation state when data changes
+    setIsNavigating(false);
     
     if (pdfViewData?.pdfData) {
       console.log("Using PDF data from Redux");
@@ -50,14 +54,21 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
     }
   }, [pdfViewData, propPdfData]);
 
-  // Cleanup function to clear Redux data when component unmounts
-  useEffect(() => {
-    return () => {
-      dispatch(clearPdfViewData());
-    };
-  }, [dispatch]);
+  // Note: Removed automatic PDF data clearing on unmount to preserve summary data
+  // PDF data will be cleared when explicitly navigating away or when new PDF is generated
 
   const handleBack = () => {
+    if (isNavigating) {
+      console.log("PDFViewPage - Navigation already in progress, ignoring click");
+      return;
+    }
+    
+    console.log("PDFViewPage - Navigating back");
+    console.log("Current PDF data:", pdfData);
+    
+    setIsNavigating(true);
+    // Optionally clear PDF data when going back (uncomment if needed)
+    // dispatch(clearPdfViewData());
     navigate(-1);
   };
 

@@ -1,4 +1,4 @@
-import { createHashRouter, RouterProvider, useNavigate, useLocation } from "react-router-dom";
+import { createHashRouter, RouterProvider, useNavigate, useLocation, Navigate } from "react-router-dom";
 import Layout from "./components/popup/Layout";
 import PopupLogin from "./popupPages/PopupLogin";
 import ProtectedRoute from "./components/popup/ProtectedRoute";
@@ -322,6 +322,10 @@ const router = createHashRouter([
       {
         path: "/",
         element: <PopupLogin />,
+      },
+      {
+        path: "*",
+        element: <Navigate to="/" />,
       },
       {
         path: "/popup/home",
