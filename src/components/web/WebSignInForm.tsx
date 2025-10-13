@@ -140,51 +140,58 @@ export default function WebSignInForm() {
         email: userInfo.email,
         picture: userInfo.picture,
       };
+      console.log("1122",user,accessToken)
 
-      // ✅ Save to extension storage (same as regular login)
-      if (chrome?.storage?.local) {
-        await chrome.storage.local.set({ 
-          token: accessToken, 
-          loggedIn: true 
-        });
-      } else {
-        // For local development - try to communicate with extension
-        try {
-          // Method 1: Try to send message to extension if it's loaded
-          if (chrome?.runtime?.id) {
-            await chrome.runtime.sendMessage({
-              type: 'STORE_LOGIN_DATA',
-              data: {
-                token: accessToken,
-                loggedIn: true
-              }
+          // ✅ Save to extension storage
+          if (chrome?.storage?.local) {
+            await chrome.storage.local.set({ 
+              token: accessToken, 
+              loggedIn: true 
             });
-            console.log('Google login data sent to extension');
           } else {
-            // Method 2: Use postMessage to communicate with extension
-            window.postMessage({
-              type: 'EXTENSION_LOGIN_DATA',
-              data: {
-                token: accessToken,
-                loggedIn: true
+            // For local development - try to communicate with extension
+            try {
+              // Method 1: Try to send message to extension if it's loaded
+              if (chrome?.runtime?.id) {
+                await chrome.runtime.sendMessage({
+                  type: 'STORE_LOGIN_DATA',
+                  data: {
+                    token: accessToken,
+                    loggedIn: true
+                  }
+                });
+                console.log('Login data sent to extension');
+              } else {
+                // Method 2: Use postMessage to communicate with extension
+                window.postMessage({
+                  type: 'EXTENSION_LOGIN_DATA',
+                  data: {
+                    token: accessToken,
+                    loggedIn: true
+                  }
+                }, '*');
+                console.log('Login data posted to extension via postMessage');
               }
-            }, '*');
-            console.log('Google login data posted to extension via postMessage');
+            } catch (error) {
+              console.log('Extension not available, using localStorage fallback');
+              localStorage.setItem("token", accessToken);
+              localStorage.setItem("loggedIn", "true");
+            }
           }
-        } catch (error) {
-          console.log('Extension not available, using localStorage fallback');
-          localStorage.setItem("token", accessToken);
-          localStorage.setItem("loggedIn", "true");
-        }
-      }
-
-      // ✅ Show success toast
+             // ✅ Show success toast
       toast.success("Google login successful! Welcome back.", {
         duration: 3000,
         position: 'top-center',
       });
+    
+          // ✅ Redirect to download page with slight delay to show toast
+          setTimeout(() => {
+            navigate("/download");
+          }, 1000);
 
-      navigate("/download");
+   
+
+   
     } catch (error) {
       console.error("Google login failed:", error);
     }
