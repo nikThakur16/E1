@@ -9,10 +9,10 @@
     "dev:extension": "vite --mode extension ",
     "dev:global": "vite --mode global ",
     
-    "build": "npm run build:web && npm run build:extension && npm run build:global --watch ",
+    "build": "npm run build:web && npm run build:extension && npm run build:global  ",
     "build:web": "tsc -b && vite build --mode web",
     "build:extension": "tsc -b && vite build --mode extension  ",
-    "build:global": "tsc -b && vite build --mode global  --watch ",
+    "build:global": "tsc -b && vite build --mode global   ",
     
     "preview:web": "vite preview --mode web ",
     "preview:extension": "vite preview --mode extension ",

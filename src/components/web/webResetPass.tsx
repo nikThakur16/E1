@@ -14,6 +14,7 @@ export default function WebResetPass() {
     const [resetPassword, { isLoading: isResetting }] = useResetPasswordMutation();
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 const token= searchParams.get("token") as string;
 console.log("token",token); 
@@ -71,7 +72,7 @@ console.log("token",token);
               fill="#4B5563"
             />
           </svg>
-          <svg
+          {/* <svg
             className="absolute right-4 top-1/2 transform -translate-y-1/2"
             width="25"
             height="24"
@@ -89,7 +90,7 @@ console.log("token",token);
               fill="#4B5563"
               fill-opacity="0.5"
             />
-          </svg>
+          </svg> */}
 
           <input
             type={showPassword ? "text" : "password"}
@@ -133,7 +134,7 @@ console.log("token",token);
               fill="#4B5563"
             />
           </svg>
-          <svg
+          {/* <svg
             className="absolute right-4 top-1/2 transform -translate-y-1/2"
             width="25"
             height="24"
@@ -151,15 +152,34 @@ console.log("token",token);
               fill="#4B5563"
               fill-opacity="0.5"
             />
-          </svg>
+          </svg> */}
 
-          <input
-            type="password"
+            <input
+              type={showConfirmPassword ? "text" : "password"}
             placeholder="Confirm Password"
             required
          className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 font-[400] text-[14px] text-[#1F2937] rounded-full focus:border-[#5B9AFF] focus:outline-none transition-colors"
         
           />
+                  <button
+            type="button"
+            onClick={() => setShowConfirmPassword(v => !v)}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2  cursor-pointer"
+            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+          >
+            {showConfirmPassword ? (
+              <svg  width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M15 9l-6 6" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round"/>
+                <circle cx="12" cy="12" r="3" stroke="#4B5563" strokeWidth="1.7"/>
+              </svg>
+            ) : (
+              <svg  width="25" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="#4B5563" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="12" r="3" stroke="#4B5563" strokeWidth="1.7"/>
+              </svg>
+            )}
+          </button>
         </div>
 
 
