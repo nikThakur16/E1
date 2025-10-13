@@ -6,6 +6,8 @@ import type { SignupFormData } from "../../config/auth.types";
 import { useSignupMutation, useResendVerificationLinkMutation } from "../../store/api/authApi";
 import toast from 'react-hot-toast';
 import { useState } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
+import axios from "axios";
 
 // Validation schema
 const signupSchema = Yup.object().shape({
@@ -93,7 +95,67 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
     }
   };
 
- 
+  const handleGoogleSignup = async (tokenResponse: any) => {
+    try {
+      const accessToken = tokenResponse.access_token;
+
+      // 🔹 Fetch user profile
+      const { data: userInfo } = await axios.get(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      const user = {
+        name: userInfo.name,
+        email: userInfo.email,
+        picture: userInfo.picture,
+      };
+
+      // ✅ Store in chrome?.storage?.local (works across popup, background, content scripts)
+      if (chrome?.storage?.local) {
+        await chrome?.storage?.local.set({
+          token: accessToken,
+          user,
+          loggedIn: true,
+        });
+        console.log('Google signup data stored in chrome storage');
+      } else {
+        // For web browser - use localStorage
+        console.log('Chrome storage not available, using localStorage');
+        localStorage.setItem("token", accessToken);
+        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("loggedIn", "true");
+        console.log('Google signup data stored in localStorage:', {
+          token: accessToken,
+          user,
+          loggedIn: true
+        });
+      }
+
+      // ✅ Show success toast
+      toast.success("Google signup successful! Welcome to SummarizeX.", {
+        duration: 3000,
+        position: 'top-center',
+      });
+
+      // Redirect to download page
+      navigate("/download");
+    } catch (error) {
+      console.error("Google signup failed:", error);
+      toast.error("Google signup failed. Please try again.");
+    }
+  };
+
+  // Hook that triggers Google signup popup
+  const googleSignup = useGoogleLogin({
+    onSuccess: handleGoogleSignup,
+    onError: () => {
+      console.error("Google signup failed");
+      toast.error("Google signup failed. Please try again.");
+    },
+  });
 
   return (
     <div className="w-full px-6 md:px-12 py-16 bg-white rounded-[28px] shadow p-8">
@@ -386,7 +448,11 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
             Continue with Apple
           </span>
         </button>
-        <button className="flex-1 flex items-center justify-center gap-2 border border-gray-300 rounded-full py-3 hover:bg-gray-50 cursor-pointer">
+        <button 
+          type="button"
+          onClick={() => googleSignup()}
+          className="flex-1 flex items-center justify-center gap-2 border border-gray-300 rounded-full py-3 hover:bg-gray-50 cursor-pointer"
+        >
           <svg
             width="17"
             height="17"
