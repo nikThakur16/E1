@@ -216,7 +216,7 @@
   // Update floating icon visibility based on recording state
   function updateFloatingIconVisibility(isRecording) {
     isRecordingActive = isRecording;
-    console.log('Recording state changed:', isRecording);
+   
     
     if (floatingIcon) {
       floatingIcon.style.display = isRecording ? 'flex' : 'none';

@@ -3,10 +3,11 @@ import * as Yup from "yup";
 import { useNavigate } from "react-router-dom";
 import Button from "../comman/button";
 import type { SignupFormData } from "../../config/auth.types";
-import { useSignupMutation, useResendVerificationLinkMutation } from "../../store/api/authApi";
+import { useSignupMutation, useResendVerificationLinkMutation  ,useGoogleLoginMutation} from "../../store/api/authApi";
 import toast from 'react-hot-toast';
 import { useState } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
+import { GoogleLogin } from "@react-oauth/google";
+import { jwtDecode } from "jwt-decode";
 import axios from "axios";
 
 // Validation schema
@@ -34,7 +35,7 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
   const [resendVerification, { isLoading: isResending }] = useResendVerificationLinkMutation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
+  const [googleLoginMutation, { isLoading: isGoogleLoginLoading }] = useGoogleLoginMutation();
   // Initial form values
   const initialValues: SignupFormData = {
     firstName: "",
@@ -95,94 +96,86 @@ export default function WebSignUpForm({ onSignUpSuccess }: { onSignUpSuccess: (f
     }
   };
 
-  const handleGoogleSignup = async (tokenResponse: any) => {
+  const handleGoogleSignup = async (credentialResponse: any) => {
     try {
-      const accessToken = tokenResponse.access_token;
+      const idToken = credentialResponse.credential; // This is the JWT ID token
+      console.log("Google ID Token:", idToken);
 
-      // 🔹 Fetch user profile
-      const { data: userInfo } = await axios.get(
-        "https://www.googleapis.com/oauth2/v3/userinfo",
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+      // Decode the ID token to extract user info
+      const decoded: any = jwtDecode(idToken);
+      console.log("Decoded ID Token:", decoded);
 
+      // Extract user data from decoded token
       const user = {
-        name: userInfo.name,
-        email: userInfo.email,
-        picture: userInfo.picture,
+        name: decoded.name,
+        email: decoded.email,
+        picture: decoded.picture,
       };
-      console.log("Google user info:", user, accessToken);
 
-      // ✅ Save to extension storage with user data
-      if (chrome?.storage?.local) {
-        await chrome.storage.local.set({ 
-          token: accessToken, 
-          user: user,
-          loggedIn: true 
+      // Send the ID token to your backend
+      const result = await googleLoginMutation(idToken).unwrap();
+      console.log("=========", result);
+
+      if (result?.status === 1) {
+        toast.success("Google signup successful! Welcome to SummarizeX.", {
+          duration: 3000,
+          position: 'top-center',
         });
-        console.log('Google signup data stored directly in extension storage');
-      } else {
-        // For local development - try to communicate with extension
-        try {
-          // Method 1: Try to send message to extension if it's loaded
-          if (chrome?.runtime?.id) {
-            await chrome.runtime.sendMessage({
-              type: 'STORE_LOGIN_DATA',
-              data: {
-                token: accessToken,
-                user: user,
-                loggedIn: true
-              }
-            });
-            console.log('Google signup data sent to extension via runtime message');
-          } else {
-            // Method 2: Use postMessage to communicate with extension
-            window.postMessage({
-              type: 'EXTENSION_LOGIN_DATA',
-              data: {
-                token: accessToken,
-                user: user,
-                loggedIn: true
-              }
-            }, '*');
-            console.log('Google signup data posted to extension via postMessage');
+
+        // ✅ Save to extension storage with user data
+        if (chrome?.storage?.local) {
+          await chrome.storage.local.set({ 
+            token: result?.data?.token, 
+            user: user,
+            loggedIn: true 
+          });
+          console.log('Google signup data stored directly in extension storage');
+        } else {
+          // For local development - try to communicate with extension
+          try {
+            // Method 1: Try to send message to extension if it's loaded
+            if (chrome?.runtime?.id) {
+              await chrome.runtime.sendMessage({
+                type: 'STORE_LOGIN_DATA',
+                data: {
+                  token: result?.data?.token,
+                  user: user,
+                  loggedIn: true
+                }
+              });
+              console.log('Google signup data sent to extension via runtime message');
+            } else {
+              // Method 2: Use postMessage to communicate with extension
+              window.postMessage({
+                type: 'EXTENSION_LOGIN_DATA',
+                data: {
+                  token: result?.data?.token,
+                  user: user,
+                  loggedIn: true
+                }
+              }, '*');
+              console.log('Google signup data posted to extension via postMessage');
+            }
+          } catch (error) {
+            console.log('Extension not available, using localStorage fallback');
+            localStorage.setItem("token", result?.data?.token);
+            localStorage.setItem("user", JSON.stringify(user));
+            localStorage.setItem("loggedIn", "true");
           }
-        } catch (error) {
-          console.log('Extension not available, using localStorage fallback');
-          localStorage.setItem("token", accessToken);
-          localStorage.setItem("user", JSON.stringify(user));
-          localStorage.setItem("loggedIn", "true");
         }
+
+        // ✅ Redirect to download page with slight delay to show toast
+        setTimeout(() => {
+          navigate("/download");
+        }, 1000);
+      } else {
+        toast.error(result?.message || "Google signup failed. Please try again.");
       }
-    // ✅ Show success toast
-    toast.success("Google signup successful! Welcome to SummarizeX.", {
-      duration: 3000,
-      position: 'top-center',
-    });
- 
-// ✅ Redirect to download page with slight delay to show toast
-setTimeout(() => {
-  navigate("/download");
-}, 1000);
-
-  
-
-
     } catch (error) {
       console.error("Google signup failed:", error);
       toast.error("Google signup failed. Please try again.");
     }
   };
-
-  // Hook that triggers Google signup popup
-  const googleSignup = useGoogleLogin({
-    onSuccess: handleGoogleSignup,
-    onError: () => {
-      console.error("Google signup failed");
-      toast.error("Google signup failed. Please try again.");
-    },
-  });
 
   return (
     <div className="w-full px-6 md:px-12 py-16 bg-white rounded-[28px] shadow p-8">
@@ -475,47 +468,22 @@ setTimeout(() => {
             Continue with Apple
           </span>
         </button>
-        <button 
-          type="button"
-          onClick={() => googleSignup()}
-          className="flex-1 flex items-center justify-center gap-2 border border-gray-300 rounded-full py-3 hover:bg-gray-50 cursor-pointer"
-        >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 17 17"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M3.57034 8.34673C3.57034 7.82711 3.65659 7.32886 3.81072 6.86161L1.11447 4.80273C0.588969 5.86961 0.292969 7.07186 0.292969 8.34673C0.292969 9.62061 0.588719 10.822 1.11334 11.8882L3.80809 9.82536C3.65547 9.36023 3.57034 8.86386 3.57034 8.34673Z"
-              fill="#FBBC05"
-            />
-            <path
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M8.30413 3.62041C9.43301 3.62041 10.4526 4.02041 11.2538 4.67491L13.5843 2.34766C12.1641 1.11128 10.3434 0.347656 8.30413 0.347656C5.13813 0.347656 2.41713 2.15816 1.11426 4.80366L3.81038 6.86253C4.43163 4.97678 6.20251 3.62041 8.30413 3.62041Z"
-              fill="#EA4335"
-            />
-            <path
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M8.30413 13.0742C6.20263 13.0742 4.43176 11.7178 3.81051 9.83203L1.11426 11.8905C2.41713 14.5364 5.13813 16.3469 8.30413 16.3469C10.2581 16.3469 12.1238 15.653 13.5239 14.353L10.9646 12.3745C10.2425 12.8294 9.33313 13.0742 8.30413 13.0742Z"
-              fill="#34A853"
-            />
-            <path
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M15.9513 8.34708C15.9513 7.87433 15.8784 7.3652 15.7692 6.89258H8.3042V9.98345H12.6012C12.3863 11.0373 11.8016 11.8475 10.9647 12.3747L13.5239 14.3532C14.9947 12.9882 15.9513 10.9547 15.9513 8.34708Z"
-              fill="#4285F4"
-            />
-          </svg>
-          <span className="text-sm font-[400] text-[#4B5563]">
-            Continue with Google
-          </span>
-        </button>
+        <div className="flex-1">
+          <GoogleLogin
+            onSuccess={handleGoogleSignup}
+            onError={() => {
+              console.error("Google signup failed");
+              toast.error("Google signup failed. Please try again.");
+            }}
+            useOneTap={false}
+            theme="outline"
+            size="large"
+            text="continue_with"   
+            shape="pill"         
+            logo_alignment="center"
+            
+          />
+        </div>
       </div>
 
       {/* Sign In */}

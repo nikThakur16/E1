@@ -1,12 +1,14 @@
-
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { type RootState } from '../store';
-import { clearPdfViewData } from '../store/slices/navigationSlice';
-import jsPDF from 'jspdf';
-import { formatFileSize } from '../helper/formatSize';
-import BackButton from '../components/popup/BackButton';
+import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { type RootState } from "../store";
+import {
+  clearPdfViewData,
+  loadPdfViewData,
+} from "../store/slices/navigationSlice";
+import jsPDF from "jspdf";
+import { formatFileSize } from "../helper/formatSize";
+import BackButton from "../components/popup/BackButton";
 
 interface PDFViewPageProps {
   pdfData?: {
@@ -21,25 +23,51 @@ interface PDFViewPageProps {
   };
 }
 
-export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) {
+export default function PDFViewPage({
+  pdfData: propPdfData,
+}: PDFViewPageProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const dispatch = useDispatch();
   const { pdfViewData } = useSelector((state: RootState) => state.navigation);
-  
+
   const [pdfData, setPdfData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isNavigating, setIsNavigating] = useState(false);
-  
+
+
+  // Load persisted data from storage on mount
+  useEffect(() => {
+    const loadPersistedData = async () => {
+      try {
+        // Check chrome storage first
+        if (chrome?.storage?.local) {
+          const result = await chrome.storage.local.get(["pdfViewData"]);
+          if (result.pdfViewData && !pdfViewData) {
+            console.log("Loading persisted PDF data from chrome storage");
+            dispatch(loadPdfViewData(result.pdfViewData));
+          }
+        } else {
+          // Fallback to localStorage
+          const persistedData = localStorage.getItem("pdfViewData");
+          if (persistedData && !pdfViewData) {
+            const parsedData = JSON.parse(persistedData);
+            console.log("Loading persisted PDF data from localStorage");
+            dispatch(loadPdfViewData(parsedData));
+          }
+        }
+      } catch (error) {
+        console.error("Error loading persisted PDF data:", error);
+      }
+    };
+
+    loadPersistedData();
+  }, []);
+
   useEffect(() => {
     console.log("=== PDFViewPage useEffect triggered ===");
     console.log("PDF view data from Redux:", pdfViewData);
     console.log("Prop PDF data:", propPdfData);
     console.log("=====================================");
-    
-    // Reset navigation state when data changes
-    setIsNavigating(false);
-    
+
     if (pdfViewData?.pdfData) {
       console.log("Using PDF data from Redux");
       setPdfData(pdfViewData.pdfData);
@@ -58,70 +86,66 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
   // PDF data will be cleared when explicitly navigating away or when new PDF is generated
 
   const handleBack = () => {
-    if (isNavigating) {
-      console.log("PDFViewPage - Navigation already in progress, ignoring click");
-      return;
-    }
-    
-    console.log("PDFViewPage - Navigating back");
-    console.log("Current PDF data:", pdfData);
-    
-    setIsNavigating(true);
-    // Optionally clear PDF data when going back (uncomment if needed)
-    // dispatch(clearPdfViewData());
-    navigate(-1);
+    setTimeout(() => {
+      if(chrome?.storage?.local) {
+        chrome.storage.local.get("navigationRoute", async (result) => {
+          await chrome.storage.local.remove("navigationRoute");
+          navigate(result.navigationRoute);
+        });
+      }
+    }, 100);
   };
 
   const handleDownload = () => {
     if (!pdfData) {
-      console.error('No PDF data available for download');
+      console.error("No PDF data available for download");
       return;
     }
-    
+
     // Use jsPDF to generate PDF
     const doc = new jsPDF();
-    
+
     // Add title
     doc.setFontSize(20);
     doc.text(pdfData.title, 20, 20);
-    
+
     // Add summary section
     doc.setFontSize(14);
-    doc.text('Summary:', 20, 40);
+    doc.text("Summary:", 20, 40);
     doc.setFontSize(12);
     const summaryLines = doc.splitTextToSize(pdfData.summary, 170);
     doc.text(summaryLines, 20, 50);
-    
+
     // Add key points section
-    let yPos = 50 + (summaryLines.length * 7) + 10;
+    let yPos = 50 + summaryLines.length * 7 + 10;
     doc.setFontSize(14);
-    doc.text('Key Points:', 20, yPos);
+    doc.text("Key Points:", 20, yPos);
     yPos += 10;
-    
+
     doc.setFontSize(12);
     pdfData.keyPoints.forEach((point: string, index: number) => {
       const pointText = `${index + 1}. ${point}`;
       const pointLines = doc.splitTextToSize(pointText, 170);
       doc.text(pointLines, 20, yPos);
       yPos += pointLines.length * 7;
-      
+
       // Add new page if content exceeds page height
       if (yPos > 270) {
         doc.addPage();
         yPos = 20;
       }
     });
-    
+
     // Save the PDF
     doc.save(`${pdfData.title}.pdf`);
   };
 
   const handleShare = async () => {
     if (!pdfData) {
-      console.error('No PDF data available for sharing');
+      console.error("No PDF data available for sharing");
       return;
     }
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -130,7 +154,7 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
           url: window.location.href,
         });
       } catch (error) {
-        console.error('Error sharing:', error);
+        console.error("Error sharing:", error);
         // Fallback to copying to clipboard
         handleCopyToClipboard();
       }
@@ -142,7 +166,7 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
 
   const handleCopyToClipboard = async () => {
     if (!pdfData) return;
-    
+
     try {
       await navigator.clipboard.writeText(pdfData.summary);
       console.log("Content copied to clipboard");
@@ -156,17 +180,27 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
     return (
       <div className="bg-gray-100 flex flex-col items-center justify-center py-6 px-8">
         <div className="w-full max-w-4xl">
-          <button 
-            onClick={handleBack} 
+          <button
+            onClick={handleBack}
             className="flex items-center text-gray-600 hover:text-gray-800 mb-4"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-5 h-5 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             Back
           </button>
         </div>
-        
+
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <div className="text-gray-600">Loading PDF data...</div>
@@ -180,23 +214,34 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
     return (
       <div className="bg-gray-100  flex flex-col items-center justify-center py-6 px-8">
         <div className="w-full max-w-4xl">
-          <button 
-            onClick={handleBack} 
+          <button
+            onClick={handleBack}
             className="flex items-center text-gray-600 hover:text-gray-800 mb-4"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              className="w-5 h-5 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             Back
           </button>
         </div>
-        
+
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="text-red-500 text-lg font-semibold mb-4">
             No PDF Data Available
           </div>
           <p className="text-gray-600 mb-6">
-            The PDF data could not be loaded. Please try generating the PDF again.
+            The PDF data could not be loaded. Please try generating the PDF
+            again.
           </p>
           <button
             onClick={handleBack}
@@ -213,7 +258,7 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
     <div className="h-full flex flex-col items-center py-6 px-8 overflow-auto">
       {/* Header */}
       <div className="w-full max-w-4xl mb-4">
-    <BackButton handleBack={handleBack} />
+        <BackButton handleBack={handleBack} />
       </div>
 
       {/* Main Content Card */}
@@ -223,16 +268,17 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
           <h1 className="text-3xl font-bold text-gray-800 mb-2">View PDF</h1>
         </div>
 
-
-      
-
         {/* Main Content Area */}
         <div className="px-6 pb-6 overflow-auto">
           <div className="flex items-start gap-6">
             {/* PDF Icon */}
             <div className="flex-shrink-0">
               <div className="w-16 h-16 bg-red-500 rounded-lg flex items-center justify-center">
-                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-10 h-10 text-white"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
                 </svg>
               </div>
@@ -240,28 +286,60 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
 
             {/* File Info */}
             <div className="flex-1">
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">{pdfData.title}</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                {pdfData.title}
+              </h3>
               <p className="text-gray-600 mb-4">Size: {pdfData?.size}</p>
-              
+
               <div className="flex items-center gap-4">
-                <button 
+                <button
                   onClick={handleDownload}
                   className="flex items-center text-blue-600 hover:text-blue-800"
                 >
-                  <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <svg
+                    className="w-5 h-5 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
                   </svg>
                   Download
                 </button>
                 <button className="flex items-center text-gray-600 hover:text-gray-800">
-                  <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  <svg
+                    className="w-5 h-5 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                    />
                   </svg>
                   Buy Me A Coffee
                 </button>
                 <button className="flex items-center text-gray-600 hover:text-gray-800">
-                  <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  <svg
+                    className="w-5 h-5 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                    />
                   </svg>
                   Feedback
                 </button>
@@ -274,25 +352,26 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
             {/* Left Column */}
             <div className="space-y-6">
               <div>
-             
-                
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h5 className="font-semibold text-gray-800 mb-2">File Details:</h5>
+                  <h5 className="font-semibold text-gray-800 mb-2">
+                    File Details:
+                  </h5>
                   <ul className="text-sm text-gray-600 space-y-1">
-                    
                     <li>File Type: {pdfData?.tag}</li>
                     <li>Size: {pdfData.size}</li>
-                    <li>Objective: Blank document needs, Obtaining a new pdf file, File Upload Test for your Website or Project, and general development experiments</li>
+                    <li>
+                      Objective: Blank document needs, Obtaining a new pdf file,
+                      File Upload Test for your Website or Project, and general
+                      development experiments
+                    </li>
                   </ul>
                 </div>
 
-          
-
                 <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-                  <h5 className="font-semibold text-gray-800 mb-2">Information About PDF Format</h5>
-                  <p className="text-sm text-gray-600">
-                   {pdfData?.summary}
-                  </p>
+                  <h5 className="font-semibold text-gray-800 mb-2">
+                    Information About PDF Format
+                  </h5>
+                  <p className="text-sm text-gray-600">{pdfData?.summary}</p>
                   <div className="mt-3 text-xs text-gray-500 space-y-1">
                     <p>Mimetype: application/pdf</p>
                     <p>Extension: pdf</p>
@@ -306,7 +385,9 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
             {/* Right Column */}
             <div className="space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h5 className="font-semibold text-gray-800 mb-3">Example PDF File Information</h5>
+                <h5 className="font-semibold text-gray-800 mb-3">
+                  Example PDF File Information
+                </h5>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Format:</span>
@@ -333,14 +414,18 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
                     <span className="text-gray-800">Adobe</span>
                   </div>
                 </div>
-                
-                <div className="mt-4">
-                  <p className="text-sm text-gray-600 mb-2">Tags: {pdfData?.tag}</p>
-                  <p className="text-sm text-gray-600 mb-2">Related: Methods and Tools</p>
-                  <p className="text-sm text-gray-600 mb-2">Article: for Editing PDF Files</p>
-                </div>
 
-            
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 mb-2">
+                    Tags: {pdfData?.tag}
+                  </p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Related: Methods and Tools
+                  </p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Article: for Editing PDF Files
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -366,7 +451,6 @@ export default function PDFViewPage({ pdfData: propPdfData }: PDFViewPageProps) 
       </div>
 
       {/* Bottom Banner */}
-   
     </div>
   );
 }

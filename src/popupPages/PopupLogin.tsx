@@ -15,10 +15,10 @@ export default function PopupLogin() {
   };
   const handleSignUpRedirect = () => {
     if (typeof chrome !== "undefined" && chrome?.tabs) {
-      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/#/signup" });
+      chrome.tabs.create({ url: "https://e1-kappa.vercel.app/signup" });
     } else {
       // Fallback for dev (open in same window)
-      window.location.href = "https://e1-kappa.vercel.app/#/signup";
+      window.location.href = "https://e1-kappa.vercel.app/signup";
     }
   }
 

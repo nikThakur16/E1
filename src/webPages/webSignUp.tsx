@@ -1,5 +1,8 @@
+
+
 import "../../style/web.css";
 import AuthLayout from "../components/web/AuthLayout";
+
 
 import WebSignUpForm from "../components/web/WebSignUpForm";
 import { useNavigate } from "react-router-dom";

@@ -255,6 +255,7 @@ const [loader, setLoader] = useState(false);
         }).unwrap();
       }
       
+      console.log("result",result)
       // Complete all steps after API response
       setTimeout(() => {
         setCompletedSteps(Array.from({ length: totalSteps }, (_, idx) => idx));
@@ -262,7 +263,7 @@ const [loader, setLoader] = useState(false);
         setSummaryResult(result);
         
         // Store summary data in Redux
-        if (result?.status === 1) {
+        if (result?.status === 1 ) {
           if(fileType == 'url' || fileType == 'text') {
             const summaryData: SummaryData = result.data;
             dispatch(setSummary(summaryData));
@@ -285,7 +286,7 @@ const [loader, setLoader] = useState(false);
           // Redirect to summary page after successful generation
           navigate("/popup/summary");
    
-        } else if (result?.status === 0) {
+        } else if (result?.status === 0 ) {
           // Show error modal when status is 0
           setErrorMessage(result?.message);
           setShowSummaryErrorModal(true);

@@ -12,6 +12,11 @@ const baseQuery = fetchBaseQuery({
     
     headers.set('SecretKey', import.meta.env.VITE_SECRETKEY);
     
+    // Add ngrok skip browser warning header for ngrok URLs
+    if (import.meta.env.VITE_API_BASE_URL?.includes('ngrok')) {
+      headers.set('ngrok-skip-browser-warning', 'true');
+    }
+    
     // Get token from chrome storage
     try {
       const result = await chrome?.storage?.local.get('token');
@@ -126,6 +131,23 @@ export const authApi = createApi({
         },
       }),
     }),
+    //for google login
+    googleLogin: builder.mutation<ApiResponse, string>({
+      query: (token: string) => ({
+        url: '/google-login',
+        method: 'POST',
+        body: { id_token: token },
+      }),
+      invalidatesTags: ['Auth'],
+    }),
+    //for apple login
+    appleLogin: builder.mutation<ApiResponse, string>({
+      query: (token: string) => ({
+        url: '/apple-login',
+        method: 'POST',
+        body: { id_token: token },
+      }),
+    }),
     //for user details
     userDetails: builder.query<ApiResponse, string>({
       query: (token: string) => ({
@@ -218,5 +240,7 @@ export const {
   useGetAIActionsCategoriesQuery,
   useGetSummaryWithActionsMutation,
   useGetSummaryForUrlMutation,
-  useGetSummaryWithTextMutation
-  } = authApi; 
+  useGetSummaryWithTextMutation,
+  useGoogleLoginMutation,
+  useAppleLoginMutation
+    } = authApi; 

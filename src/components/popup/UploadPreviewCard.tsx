@@ -189,7 +189,7 @@ export default function UploadPreviewCard({ upload }: { upload: UploadData }) {
                 {text}
               </pre>
             )}
-          {type === "url" && fileUrl && <UrlPreviewCard fileUrl={fileUrl} />}
+          {type === "url" && (fileUrl || upload?.url) && <UrlPreviewCard fileUrl={fileUrl || upload?.url || ""} />}
 
 
             {["pdf", "document", "xls", "ppt", "txt", "unknown"].includes(type) && (

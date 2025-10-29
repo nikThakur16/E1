@@ -80,29 +80,37 @@ export default function PopUpHome() {
    
     const loadUser = async () => {
       try {
-        const result = await chrome?.storage?.local.get(["token", "user", "userDetails"]);
-   
-        
-        // Set token to trigger the query
-        if (result?.token) {
-          console.log('Setting token:', result.token);
-          setToken(result.token);
+        // Try to get from chrome storage first
+        if (chrome?.storage?.local) {
+          const result = await chrome.storage.local.get(["token", "user", "userDetails"]);
+          
+          // Set token to trigger the query
+          if (result?.token) {
+            console.log('Setting token from chrome storage:', result.token);
+            setToken(result.token);
+          }
+          
+          // Prioritize stored user data from chrome storage
+          if (result?.user && result.user?.first_name) {
+            console.log('Found stored user data from chrome storage:', result.user);
+            setUser(result.user);
+            return; // Exit early if we have valid user data
+          }
         }
         
-        // Prioritize stored user data from chrome storage
-        if (result?.user && result.user?.first_name) {
-          console.log('Found stored user data:', result.user);
-          setUser(result.user);
-          return; // Exit early if we have valid user data
+        // Fallback to localStorage if chrome storage is not available or empty
+        const localStorageToken = localStorage.getItem("token");
+        if (localStorageToken) {
+          console.log('Setting token from localStorage:', localStorageToken);
+          setToken(localStorageToken);
         }
         
-        // Fallback to localStorage
         const userStr = localStorage.getItem("user");
         if (userStr) {
           const userObj = JSON.parse(userStr || "{}");
           if (userObj?.first_name) {
+            console.log('Found user data from localStorage:', userObj);
             setUser(userObj);
-            return; // Exit early if we have valid user data
           }
         }
       } catch (error) {
@@ -115,25 +123,60 @@ export default function PopUpHome() {
 
     // Listen for storage changes to detect user data updates
     let storageListener: ((changes: any, namespace: string) => void) | null = null;
+    let localStorageListener: ((e: StorageEvent) => void) | null = null;
     
+    // Listen to chrome storage changes
     if (typeof chrome !== "undefined" && chrome?.storage?.onChanged) {
       storageListener = (changes, namespace) => {
         if (namespace === 'local' && changes.user) {
-
           const newUser = changes.user.newValue;
           if (newUser?.first_name) {
+            console.log('User updated via chrome storage:', newUser);
             setUser(newUser);
           }
-        } 
+        }
+        
+        if (namespace === 'local' && changes.token) {
+          const newToken = changes.token.newValue;
+          if (newToken) {
+            console.log('Token updated via chrome storage:', newToken);
+            setToken(newToken);
+          }
+        }
       };
       
       chrome.storage.onChanged.addListener(storageListener);
     }
+    
+    // Listen to localStorage changes (for fallback)
+    localStorageListener = (e: StorageEvent) => {
+      if (e.key === 'user' && e.newValue) {
+        try {
+          const newUser = JSON.parse(e.newValue);
+          if (newUser?.first_name) {
+            console.log('User updated via localStorage:', newUser);
+            setUser(newUser);
+          }
+        } catch (error) {
+          console.error('Error parsing user from localStorage:', error);
+        }
+      }
+      
+      if (e.key === 'token' && e.newValue) {
+        console.log('Token updated via localStorage:', e.newValue);
+        setToken(e.newValue);
+      }
+    };
+    
+    window.addEventListener('storage', localStorageListener);
 
     // Cleanup listener on unmount
     return () => {
       if (storageListener && chrome?.storage?.onChanged) {
         chrome.storage.onChanged.removeListener(storageListener);
+      }
+      if (localStorageListener) {
+        window.removeEventListener('storage', localStorageListener);
       }
     };
   }, [navigate]);

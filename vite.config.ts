@@ -70,7 +70,7 @@ export default defineConfig(({ mode }: ConfigEnv) => {
     server: {
       host: "0.0.0.0",
       port: 5173,
-      allowedHosts: [".ngrok-free.app"],
+      allowedHosts: [".ngrok-free.app","https://considerate-unpuffed-rosario.ngrok-free.dev"],
     },
     build: {
       rollupOptions: {

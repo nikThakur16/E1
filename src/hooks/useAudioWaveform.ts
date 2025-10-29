@@ -24,19 +24,10 @@ export function useAudioWaveform(stream?: any, bars = 60, isPaused = false) {
       return s !== null && s !== undefined && typeof s === 'object' && typeof s.getTracks === 'function';
     };
 
-    // Safe logging that checks stream type first
-    console.log('🎵 useAudioWaveform - stream changed:', {
-      hasStream: !!stream,
-      streamId: isRealStream(stream) ? stream.id : (isSimulatedStream(stream) ? 'simulated' : 'none'),
-      streamActive: isRealStream(stream) ? stream.active : (isSimulatedStream(stream) ? true : false),
-      trackCount: isRealStream(stream) && hasGetTracksMethod(stream) ? stream.getTracks()?.length : 0,
-      isSimulated: isSimulatedStream(stream),
-      streamType: typeof stream,
-      isPaused
-    });
+
 
     if (!stream) {
-      console.log('❌ No stream provided to waveform hook');
+      // console.log('❌ No stream provided to waveform hook');
       setWaveform(Array(bars).fill(10));
       return;
     }
@@ -50,7 +41,6 @@ export function useAudioWaveform(stream?: any, bars = 60, isPaused = false) {
 
     // Check if this is a simulated stream (to avoid mic permission issues)
     if (isSimulatedStream(stream)) {
-      console.log('🎵 Using simulated waveform animation - no microphone access needed');
       
       function animateSimulatedWaveform() {
         if (isPaused) {
@@ -85,11 +75,9 @@ export function useAudioWaveform(stream?: any, bars = 60, isPaused = false) {
       // Start simulated animation
       animateSimulatedWaveform();
       
-      console.log('✅ Simulated waveform animation started');
       
       // Cleanup function for simulated stream
       return () => {
-        console.log('🧹 Cleaning up simulated waveform animation');
         if (animationRef.current) {
           cancelAnimationFrame(animationRef.current);
         }
@@ -103,7 +91,7 @@ export function useAudioWaveform(stream?: any, bars = 60, isPaused = false) {
 
     // Check if stream is active
     if (!stream.active) {
-      console.log('❌ Stream is not active');
+      // console.log('❌ Stream is not active');
       setWaveform(Array(bars).fill(10));
       return;
     }
@@ -111,31 +99,21 @@ export function useAudioWaveform(stream?: any, bars = 60, isPaused = false) {
     // Check if stream has audio tracks
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length === 0) {
-      console.log('❌ No audio tracks in stream');
+      // console.log('❌ No audio tracks in stream');
       setWaveform(Array(bars).fill(10));
       return;
     }
 
-    console.log('✅ Real stream validation passed:', {
-      audioTracks: audioTracks.length,
-      trackEnabled: audioTracks[0]?.enabled,
-      trackReadyState: audioTracks[0]?.readyState
-    });
+   
 
     try {
       // Create or resume AudioContext
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       audioContextRef.current = audioContext;
 
-      console.log('🎧 AudioContext created:', {
-        state: audioContext.state,
-        sampleRate: audioContext.sampleRate,
-        baseLatency: audioContext.baseLatency
-      });
 
       // Resume AudioContext if suspended
       if (audioContext.state === 'suspended') {
-        console.log('🔄 Resuming suspended AudioContext...');
         audioContext.resume().then(() => {
           console.log('✅ AudioContext resumed, new state:', audioContext.state);
         }).catch(err => {

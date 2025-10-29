@@ -80,7 +80,10 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           if (mounted && saved) {
             // For url/text types, no IDB fetch needed
             if (saved.type === "url" || saved.type === "text") {
-              _setUpload(saved);
+              _setUpload({
+                ...saved,
+                fileUrl: saved.fileUrl || saved.url, // Ensure fileUrl is available for URL types
+              });
               return;
             }
 
@@ -177,7 +180,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
       const toStore: UploadData = {
         type: data.type,
-        fileUrl: undefined, // Do not persist large data URLs
+        fileUrl: data.type === "url" ? data.fileUrl : undefined, // Keep fileUrl for URL types
         name: data.name ?? data.file?.name,
         size:
           data.size ??

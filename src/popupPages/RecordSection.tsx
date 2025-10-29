@@ -66,7 +66,6 @@ export default function RecordSection() {
         type: "real",
       };
     } else {
-      console.log(`🧹 Simulated stream cleanup - no tracks to stop`);
 
       return {
         streamId: "simulated",
@@ -234,11 +233,7 @@ export default function RecordSection() {
           }
         }
 
-        console.log("Recording state changed:", {
-          isRecording: data.isRecording,
-          isPaused: data.isPaused,
-          elapsedSeconds: data.elapsedSeconds,
-        });
+       
       }
     };
 

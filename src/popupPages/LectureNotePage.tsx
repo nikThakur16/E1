@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { type RootState } from "../store";
-import { clearLectureNotesData, setPdfViewData } from "../store/slices/navigationSlice";
+import { clearLectureNotesData, setPdfViewData, loadLectureNotesData } from "../store/slices/navigationSlice";
 import Heading from "../components/popup/Heading";
 import DropdownMenu from "../components/popup/DropdownMenu";
 import BackButton from "../components/popup/BackButton";
@@ -172,7 +172,12 @@ export default function LectureNotePage() {
         pdfData: pdfData
       }));
       
-      navigate('/popup/pdf-view');
+      setTimeout(async () => {
+        if(chrome?.storage?.local) {
+          await chrome.storage.local.set({ navigationRoute: '/popup/lecture-notes' });
+        }
+        navigate('/popup/pdf-view');
+      }, 100);
       
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -235,8 +240,8 @@ export default function LectureNotePage() {
   
 
     // Add your delete logic here
-    
-    navigate(-1);
+    dispatch(clearLectureNotesData());  
+    navigate("/popup/summary");
 
   };
 
@@ -297,8 +302,10 @@ export default function LectureNotePage() {
     console.log("Current content:", content);
     
     setIsNavigating(true);
-    // Go back to Summary page retaining previous Redux state
-    navigate(-1);
+    // Navigate back with a small delay to ensure state is updated
+    setTimeout(() => {
+      navigate("/popup/summary");
+    }, 100);
   };
 
   // Render bullet point with proper formatting
@@ -370,6 +377,34 @@ export default function LectureNotePage() {
     setData(apiResponse);
     setIsLoading(false);
   };
+
+  // Load persisted data from storage on mount
+  useEffect(() => {
+    const loadPersistedData = async () => {
+      try {
+        // Check chrome storage first
+        if (chrome?.storage?.local) {
+          const result = await chrome.storage.local.get(['lectureNotesData']);
+          if (result.lectureNotesData && !lectureNotesData) {
+            console.log('Loading persisted lecture notes data from chrome storage');
+            dispatch(loadLectureNotesData(result.lectureNotesData));
+          }
+        } else {
+          // Fallback to localStorage
+          const persistedData = localStorage.getItem('lectureNotesData');
+          if (persistedData && !lectureNotesData) {
+            const parsedData = JSON.parse(persistedData);
+            console.log('Loading persisted lecture notes data from localStorage');
+            dispatch(loadLectureNotesData(parsedData));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading persisted lecture notes data:', error);
+      }
+    };
+
+    loadPersistedData();
+  }, []);
 
   // Simple useEffect that uses Redux data
   useEffect(() => {

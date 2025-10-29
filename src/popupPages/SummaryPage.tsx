@@ -38,13 +38,13 @@ export default function SummaryPage() {
 
   // Helper function to get the correct summary data path
   const getSummaryData = () => {
-    console.log("###########11111#################",currentSummary);
+    console.log("###########11111#################",currentSummary , currentSummary?.summary?.transcription?.content);
     if (isUrlResponse()) {
       console.log("###########22222#################",currentSummary);
       return {
         summary: currentSummary?.summary,
         summarization: currentSummary?.summarization,
-        transcription: currentSummary?.summary?.transcription,
+        transcription: currentSummary?.summary?.transcription?.content,
         aiActions: currentSummary?.aiActionList || [],
         };
       };
@@ -53,8 +53,8 @@ export default function SummaryPage() {
     
       summary: currentSummary?.summary?.summary,
       summarization: currentSummary?.summary?.summarization,
-      transcription: currentSummary?.summary?.transcription,
-      aiActions: currentSummary?.aiActionList || []
+      transcription: currentSummary?.summary?.transcription?.content,
+      aiActions: currentSummary?.aiActionList || [],
     };
   };
 
@@ -165,7 +165,13 @@ export default function SummaryPage() {
         pdfData: pdfData
       }));
       
-      navigate('/popup/pdf-view');
+      setTimeout(async () => {
+        if(chrome?.storage?.local) {
+          await chrome.storage.local.set({ navigationRoute: '/popup/summary' });
+          
+        }
+        navigate('/popup/pdf-view');
+      }, 100);
       
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -347,9 +353,7 @@ export default function SummaryPage() {
   // Display error if any
   const displayError = localError || apiError || error;
 
-  if (isLoading || isRehydrating) {
-    return <div className="text-center mt-20 text-gray-500">Loading...</div>;
-  }
+
 
   if (displayError) {
     return (

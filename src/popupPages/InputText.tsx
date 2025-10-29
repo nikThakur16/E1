@@ -48,7 +48,10 @@ const InputText = () => {
   return (
     <div className="bg-[#F4F8FF] px-4 py-8">
       <div className="w-full">
-        <BackButton handleBack={() => navigate('/upload')} />
+        <BackButton handleBack={() => {
+          setText("");
+          navigate('/popup/upload');
+        }} />
       </div>
 
       <div className="w-full text-center">
