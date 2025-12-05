@@ -1,12 +1,12 @@
 import { useNavigate, useLocation } from "react-router";
 import BackButton from "../components/popup/BackButton";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Heading from "../components/popup/Heading";
 import Button from "../components/comman/button";
 
 import GenratingSumModal from "../components/popup/GenratingSumModal";
 import { useGetSummaryWithTextMutation } from "../store/api/authApi";
-import { setSummary } from "../store/slices/summarySlice";
+import { setSummary, clearSummary } from "../store/slices/summarySlice";
 import { useDispatch } from "react-redux";
 
 const InputText = () => {
@@ -20,7 +20,17 @@ const InputText = () => {
   const dispatch = useDispatch();
   const [getSummaryWithText] = useGetSummaryWithTextMutation();
 
-  const handleGenerateSummary = () => {
+  // Clear old summary when component mounts (user is starting fresh)
+  useEffect(() => {
+    dispatch(clearSummary());
+    if (chrome?.storage?.local) {
+      chrome.storage.local.remove('currentSummary').catch((e) => {
+        console.error('Failed to clear old summary on mount:', e);
+      });
+    }
+  }, [dispatch]);
+
+  const handleGenerateSummary = async () => {
 
     // Remove all spaces and count remaining characters
     const charCount = text.replace(/\s/g, "").length;
@@ -31,22 +41,57 @@ const InputText = () => {
     }
 
     setError("");
+    
+    // Clear old summary data before generating new one
+    dispatch(clearSummary());
+    if (chrome?.storage?.local) {
+      try {
+        await chrome.storage.local.remove('currentSummary');
+        console.log('Cleared old summary from storage before generating new one');
+      } catch (e) {
+        console.error('Failed to clear old summary:', e);
+      }
+    }
+    
     setShowModal(true); 
-    getSummaryWithText({text: text}).then((res) => {
+    
+    try {
+      const res = await getSummaryWithText({text: text}).unwrap();
       console.log("text summary",res);
-      dispatch(setSummary(res?.data?.data[0]));
-      if(res?.data?.status === 1){
+      const summaryData = res?.data?.[0];
+      
+      if(res?.status === 1 && summaryData){
+        // Set new summary in Redux
+        dispatch(setSummary(summaryData));
+        
+        // Ensure storage is saved before navigation
+        if (chrome?.storage?.local) {
+          try {
+            await chrome.storage.local.set({ currentSummary: summaryData });
+            console.log('Stored text summary to chrome storage');
+            
+            // Store route for persistence
+            await chrome.storage.local.set({ lastPopupRoute: '/popup/summary' });
+            console.log('Stored route: /popup/summary');
+          } catch (e) {
+            console.error('Failed to store summary:', e);
+          }
+        }
+        
         setShowModal(false);
-        navigate("/popup/summary", { state: { summary: res?.data?.data, text } });
+        navigate("/popup/summary", { state: { summary: res?.data, text } });
       }else{
         setShowModal(false);
-        setError(res?.data?.message || "Something went wrong");
+        setError(res?.message || "Something went wrong");
       }
-    });
-    };
+    } catch (error: any) {
+      setShowModal(false);
+      setError(error?.data?.message || error?.message || "Something went wrong");
+    }
+  };
 
   return (
-    <div className="bg-[#F4F8FF] px-4 py-8">
+    <div className="bg-[#F4F8FF] h-full px-4 py-8">
       <div className="w-full">
         <BackButton handleBack={() => {
           setText("");

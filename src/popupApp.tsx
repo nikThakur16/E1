@@ -16,6 +16,7 @@ import AIActionsPage from "./popupPages/AIActionsPage";
 import LectureNotePage from "./popupPages/LectureNotePage";
 import WebResetPassword from "./webPages/WebResetPassword";
 import PDFViewPage from "./popupPages/PDFViewPage";
+import SummaryPage2 from "./popupPages/SummaryPage2";
 
 
 // Helper function to check if a route can be restored based on available data
@@ -105,25 +106,20 @@ function LayoutWithPersistence() {
     checkAuthAndRoute();
   }, [navigate, location.pathname]);
 
-  // Store current route for persistence
+  // Store current route for persistence and sync across all tabs
   useEffect(() => {
     const storeRoute = async () => {
-      // Define routes that should be persisted
-      const persistableRoutes = [
-        '/popup/summary',
-        '/popup/ai-actions', 
-        '/popup/lecture-notes',
-        '/popup/pdf-view',
-        '/popup/record/process',
-        '/popup/upload/process'
-      ];
+      // Skip storing login route as it's handled separately
+      if (location.pathname === '/') {
+        return;
+      }
       
-      if (persistableRoutes.includes(location.pathname) && chrome?.storage?.local) {
+      if (chrome?.storage?.local) {
         try {
           await chrome.storage.local.set({ lastPopupRoute: location.pathname });
-          console.log('Stored route:', location.pathname);
+          console.log('Stored route for syncing:', location.pathname);
           
-          // Notify all tabs about the route change
+          // Notify all tabs about the route change via content scripts
           chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {
               if (tab.id) {
@@ -135,6 +131,14 @@ function LayoutWithPersistence() {
                 });
               }
             });
+          });
+          
+          // Also send SYNC_DATA message to popup instances via runtime
+          chrome.runtime.sendMessage({
+            type: 'SYNC_DATA',
+            data: { route: location.pathname }
+          }).catch(() => {
+            // Ignore errors if no listeners
           });
         } catch (error) {
           console.error('Error storing route:', error);
@@ -162,6 +166,12 @@ function LayoutWithPersistence() {
         console.log('Received sync data message:', message);
         // Handle data synchronization
         handleDataSync(message.data);
+      } else if (message.type === 'ROUTE_CHANGED') {
+        console.log('Received route changed message:', message.route);
+        // Navigate to the new route if different
+        if (message.route && location.pathname !== message.route) {
+          navigate(message.route);
+        }
       }
     };
 
@@ -174,7 +184,7 @@ function LayoutWithPersistence() {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
     };
-  }, []);
+  }, [navigate, location.pathname]);
 
   // Handle data synchronization from other tabs
   const handleDataSync = async (data: any) => {
@@ -194,8 +204,36 @@ function LayoutWithPersistence() {
     
     if (data?.upload) {
       console.log('Syncing upload from other tab');
-      // Upload data is already in storage, just trigger a refresh
-      forcePopupRefresh();
+      // When upload changes, check the route and navigate if needed
+      if (chrome?.storage?.local) {
+        try {
+          const result = await chrome.storage.local.get('lastPopupRoute');
+          const route = result?.lastPopupRoute;
+          if (route && location.pathname !== route) {
+            console.log('Navigating to upload route:', route);
+            navigate(route);
+          } else {
+            // If no route found, determine route from upload data
+            const isRecording = data.upload?.fileName?.startsWith("recording_") || 
+                               data.upload?.name?.startsWith("recording_");
+            const uploadRoute = (isRecording && data.upload?.type === "audio") 
+              ? "/popup/record/process" 
+              : "/popup/upload/process";
+            
+            if (location.pathname !== uploadRoute) {
+              console.log('Navigating to determined upload route:', uploadRoute);
+              navigate(uploadRoute);
+            } else {
+              forcePopupRefresh();
+            }
+          }
+        } catch (e) {
+          console.error('Error syncing upload route:', e);
+          forcePopupRefresh();
+        }
+      } else {
+        forcePopupRefresh();
+      }
     }
   };
 
@@ -211,21 +249,37 @@ function LayoutWithPersistence() {
           }
         }
         
-        // Handle route changes - notify content scripts
+        // Handle route changes - sync across all popup instances
         if (changes.lastPopupRoute) {
-          console.log('Route changed, notifying content scripts:', changes.lastPopupRoute.newValue);
+          const newRoute = changes.lastPopupRoute.newValue;
+          console.log('Route changed, syncing across tabs:', newRoute);
+          
+          // Navigate this popup instance if route is different
+          if (newRoute && location.pathname !== newRoute) {
+            console.log('Navigating to synced route:', newRoute);
+            navigate(newRoute);
+          }
+          
           // Send message to all tabs about route change
           chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {
               if (tab.id) {
                 chrome.tabs.sendMessage(tab.id, {
                   type: 'ROUTE_CHANGED',
-                  route: changes.lastPopupRoute.newValue
+                  route: newRoute
                 }).catch(() => {
                   // Ignore errors for tabs that don't have content script
                 });
               }
             });
+          });
+          
+          // Also send SYNC_DATA message to other popup instances
+          chrome.runtime.sendMessage({
+            type: 'SYNC_DATA',
+            data: { route: newRoute }
+          }).catch(() => {
+            // Ignore errors if no listeners
           });
         }
         
@@ -249,16 +303,21 @@ function LayoutWithPersistence() {
         // Handle upload changes - notify content scripts
         if (changes['popup:upload']) {
           console.log('Upload changed, notifying content scripts');
-          chrome.tabs.query({}, (tabs) => {
-            tabs.forEach(tab => {
-              if (tab.id) {
-                chrome.tabs.sendMessage(tab.id, {
-                  type: 'UPLOAD_CHANGED',
-                  upload: changes['popup:upload'].newValue
-                }).catch(() => {
-                  // Ignore errors for tabs that don't have content script
-                });
-              }
+          // Get the route for the upload
+          chrome.storage.local.get('lastPopupRoute').then((result) => {
+            const route = result?.lastPopupRoute;
+            chrome.tabs.query({}, (tabs) => {
+              tabs.forEach(tab => {
+                if (tab.id) {
+                  chrome.tabs.sendMessage(tab.id, {
+                    type: 'UPLOAD_CHANGED',
+                    upload: changes['popup:upload'].newValue,
+                    route: route // Include route for navigation
+                  }).catch(() => {
+                    // Ignore errors for tabs that don't have content script
+                  });
+                }
+              });
             });
           });
         }
@@ -384,7 +443,8 @@ const router = createHashRouter([
         path: "/popup/summary",
         element: (
           <ProtectedRoute>
-            <SummaryPage />
+            {/* <SummaryPage /> */}
+            <SummaryPage2/>
           </ProtectedRoute>
         ),
       },

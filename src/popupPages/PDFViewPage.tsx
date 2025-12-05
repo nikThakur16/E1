@@ -9,6 +9,7 @@ import {
 import jsPDF from "jspdf";
 import { formatFileSize } from "../helper/formatSize";
 import BackButton from "../components/popup/BackButton";
+import { generatePDFFromHTML } from "../helper/generatePDF";
 
 interface PDFViewPageProps {
   pdfData?: {
@@ -16,9 +17,10 @@ interface PDFViewPageProps {
     size: string;
     content: string;
     summary: string;
-    keyPoints: string[];
-    transcription: string;
-    createdAt: string;
+    summary_html?: string;
+    keyPoints?: string[];
+    transcription?: string;
+    createdAt?: string;
     tag: string;
   };
 }
@@ -32,7 +34,9 @@ export default function PDFViewPage({
 
   const [pdfData, setPdfData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [calculatedSize, setCalculatedSize] =
+    useState<string>("Calculating...");
+  const [isCalculatingSize, setIsCalculatingSize] = useState(false);
 
   // Load persisted data from storage on mount
   useEffect(() => {
@@ -82,12 +86,78 @@ export default function PDFViewPage({
     }
   }, [pdfViewData, propPdfData]);
 
+  // Calculate PDF size when pdfData is available
+  useEffect(() => {
+    const calculatePDFSize = async () => {
+      if (!pdfData) return;
+
+      setIsCalculatingSize(true);
+      try {
+        const htmlContent = pdfData.summary_html || pdfData.content;
+        const title = pdfData.title || "Untitled";
+        const keyPoints = pdfData.keyPoints || [];
+
+        // More accurate estimation based on content
+        let estimatedBytes = 0;
+
+        // Base PDF structure overhead (~5KB)
+        estimatedBytes += 5000;
+
+        // Title size (text encoding: ~1 byte per char)
+        estimatedBytes += title.length;
+
+        // HTML content size (compressed in PDF, estimate 0.3x of original)
+        if (htmlContent && htmlContent.includes("<")) {
+          // Remove HTML tags for text estimation
+          const textContent = htmlContent.replace(/<[^>]*>/g, "");
+          estimatedBytes += Math.ceil(textContent.length * 0.4);
+
+          // Add overhead for HTML structure and formatting
+          estimatedBytes += Math.ceil(htmlContent.length * 0.1);
+        } else {
+          // Plain text content
+          const textContent = pdfData.summary || pdfData.content || "";
+          estimatedBytes += Math.ceil(textContent.length * 0.5);
+        }
+
+        // Key points overhead
+        if (keyPoints.length > 0) {
+          const keyPointsText = keyPoints.join(" ");
+          estimatedBytes += Math.ceil(keyPointsText.length * 0.4);
+          estimatedBytes += keyPoints.length * 200; // Formatting overhead per point
+        }
+
+        // Add padding for images, fonts, and PDF structure
+        estimatedBytes = Math.ceil(estimatedBytes * 1.2);
+
+        // Minimum size
+        estimatedBytes = Math.max(estimatedBytes, 10000);
+
+        setCalculatedSize(formatFileSize(estimatedBytes));
+      } catch (error) {
+        console.error("Error calculating PDF size:", error);
+        setCalculatedSize("Unknown");
+      } finally {
+        setIsCalculatingSize(false);
+      }
+    };
+
+    if (pdfData) {
+      // Add a small delay to avoid blocking the UI
+      const timer = setTimeout(() => {
+        calculatePDFSize();
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [pdfData]);
+
   // Note: Removed automatic PDF data clearing on unmount to preserve summary data
   // PDF data will be cleared when explicitly navigating away or when new PDF is generated
 
   const handleBack = () => {
     setTimeout(() => {
-      if(chrome?.storage?.local) {
+      if (chrome?.storage?.local) {
         chrome.storage.local.get("navigationRoute", async (result) => {
           await chrome.storage.local.remove("navigationRoute");
           navigate(result.navigationRoute);
@@ -96,48 +166,50 @@ export default function PDFViewPage({
     }, 100);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!pdfData) {
       console.error("No PDF data available for download");
       return;
     }
 
-    // Use jsPDF to generate PDF
-    const doc = new jsPDF();
+    try {
+      // Check if we have HTML content (summary_html)
+      const htmlContent = pdfData.summary_html || pdfData.content;
 
-    // Add title
-    doc.setFontSize(20);
-    doc.text(pdfData.title, 20, 20);
-
-    // Add summary section
-    doc.setFontSize(14);
-    doc.text("Summary:", 20, 40);
-    doc.setFontSize(12);
-    const summaryLines = doc.splitTextToSize(pdfData.summary, 170);
-    doc.text(summaryLines, 20, 50);
-
-    // Add key points section
-    let yPos = 50 + summaryLines.length * 7 + 10;
-    doc.setFontSize(14);
-    doc.text("Key Points:", 20, yPos);
-    yPos += 10;
-
-    doc.setFontSize(12);
-    pdfData.keyPoints.forEach((point: string, index: number) => {
-      const pointText = `${index + 1}. ${point}`;
-      const pointLines = doc.splitTextToSize(pointText, 170);
-      doc.text(pointLines, 20, yPos);
-      yPos += pointLines.length * 7;
-
-      // Add new page if content exceeds page height
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
+      if (htmlContent && htmlContent.includes("<")) {
+        // Use HTML to PDF generator for better formatting
+        await generatePDFFromHTML({
+          title: pdfData.title,
+          htmlContent: htmlContent,
+          logoUrl: "/web/logo.svg",
+          companyName: "SummarizeX",
+          fileName: `${pdfData.title
+            .replace(/[^a-z0-9]/gi, "_")
+            .toLowerCase()}.pdf`,
+        });
+      } else {
+        // Fallback to plain text PDF generation
+        const doc = new jsPDF();
+        doc.setFontSize(20);
+        doc.text(pdfData.title, 20, 20);
+        doc.setFontSize(14);
+        doc.text("Summary:", 20, 40);
+        doc.setFontSize(12);
+        const summaryLines = doc.splitTextToSize(
+          pdfData.summary || pdfData.content,
+          170
+        );
+        doc.text(summaryLines, 20, 50);
+        doc.save(`${pdfData.title}.pdf`);
       }
-    });
-
-    // Save the PDF
-    doc.save(`${pdfData.title}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      // Fallback to basic PDF
+      const doc = new jsPDF();
+      doc.text(pdfData.title, 20, 20);
+      doc.text(pdfData.summary || "No content available", 20, 40);
+      doc.save(`${pdfData.title}.pdf`);
+    }
   };
 
   const handleShare = async () => {
@@ -254,50 +326,162 @@ export default function PDFViewPage({
     );
   }
 
+  // Format date for display - handles both string dates and Date objects
+  const formatDate = (dateInput?: string | Date) => {
+    if (!dateInput) {
+      return new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
+
+    try {
+      // If it's already a formatted string (from SummaryPage), return it
+      if (typeof dateInput === "string" && dateInput.includes(",")) {
+        // Check if it's already formatted (contains comma from toLocaleDateString)
+        const dateObj = new Date(dateInput);
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+        }
+        // If it's a valid formatted string, return it
+        return dateInput;
+      }
+
+      // Try to parse as Date
+      const date =
+        typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+
+      if (isNaN(date.getTime())) {
+        // Invalid date, return current date
+        return new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+      }
+
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
+  };
+
+  // Get HTML content
+  const htmlContent = pdfData.summary_html || pdfData.content || "";
+  const title = pdfData.title || "Untitled Summary";
+  const keyPoints = pdfData.keyPoints || [];
+  const tag = pdfData.tag || "Document";
+  const createdAt = formatDate(pdfData.createdAt);
+  const fileSize = isCalculatingSize
+    ? "Calculating..."
+    : calculatedSize || "Unknown";
+
   return (
-    <div className="h-full flex flex-col items-center py-6 px-8 overflow-auto">
-      {/* Header */}
+    <div className="bg-[#F4F8FF] min-h-screen flex flex-col items-center py-6 px-4 overflow-auto">
+      {/* Back Button */}
       <div className="w-full max-w-4xl mb-4">
         <BackButton handleBack={handleBack} />
       </div>
 
-      {/* Main Content Card */}
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-lg overflow-auto">
-        {/* Title */}
-        <div className="text-center py-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">View PDF</h1>
-        </div>
+      {/* PDF Preview Container - A4-like proportions */}
+      <div className="w-full max-w-4xl px-4 mb-6">
+        {/* PDF Document Preview */}
+        <div>
+          {/* PDF Content */}
+          <div>
+            {/* Header with Logo and Date */}
+            <div className="flex  justify-between items-center  gap-4 mb-8 pb-6 border-b-2 border-gray-300">
+              <div className="flex items-center gap-4">
+                <div className="">
+                  <img
+                    src="/popup/logo-blue.svg"
+                    alt="Logo"
+                    className="h-8 w-auto"
+               
+                  />
+                </div>
+                {/* <div>
+                  <h1 className="text-2xl font-bold text-[#1F2937] m-0 leading-tight">
+                    SummarizeX
+                  </h1>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    AI-Powered Summarization
+                  </p>
+                </div> */}
+              </div>
+              <div >
+                <div className="font-semibold mb-1 text-gray-700">
+                  Generated on:
+                </div>
+                <div className="text-gray-600">{createdAt}</div>
+              </div>
+            </div>
 
-        {/* Main Content Area */}
-        <div className="px-6 pb-6 overflow-auto">
-          <div className="flex items-start gap-6">
-            {/* PDF Icon */}
-            <div className="flex-shrink-0">
-              <div className="w-16 h-16 bg-red-500 rounded-lg flex items-center justify-center">
+            {/* Title */}
+            <h2 className="text-xl w-full font-bold text-[#1F2937] text-center mb-6 pb-4 border-b-4 border-[#3F7EF8] ">
+              {title}
+            </h2>
+
+            {/* Document Metadata */}
+            <div className="flex flex-wrap items-center gap-3 mb-8">
+              <span className="bg-gradient-to-r from-blue-50 to-blue-100 text-[#3F7EF8] px-4 py-2 rounded-lg font-semibold text-sm shadow-sm border border-blue-200">
+                {tag}
+              </span>
+              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
                 <svg
-                  className="w-10 h-10 text-white"
-                  fill="currentColor"
+                  className="w-4 h-4 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                  />
                 </svg>
+                <span className="font-medium">Size:</span>
+                <span className="font-semibold text-gray-700">
+                  {isCalculatingSize ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+                      Calculating...
+                    </span>
+                  ) : (
+                    fileSize
+                  )}
+                </span>
               </div>
             </div>
 
-            {/* File Info */}
-            <div className="flex-1">
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                {pdfData.title}
-              </h3>
-              <p className="text-gray-600 mb-4">Size: {pdfData?.size}</p>
+            {/* HTML Content */}
+            {htmlContent && (
+              <div
+                className="pdf-preview-content mb-8"
+                dangerouslySetInnerHTML={{ __html: htmlContent }}
+              />
+            )}
 
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={handleDownload}
-                  className="flex items-center text-blue-600 hover:text-blue-800"
-                >
+            {/* Key Points Section */}
+            {keyPoints && keyPoints.length > 0 && (
+              <div className="mt-8 pt-6 border-t-2 border-gray-200 bg-blue-50/30 rounded-lg p-6 -mx-2">
+                <h3 className="text-xl font-semibold text-[#1F2937] mb-4 flex items-center gap-2">
                   <svg
-                    className="w-5 h-5 mr-1"
+                    className="w-5 h-5 text-[#3F7EF8]"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -306,151 +490,269 @@ export default function PDFViewPage({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  Download
-                </button>
-                <button className="flex items-center text-gray-600 hover:text-gray-800">
-                  <svg
-                    className="w-5 h-5 mr-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                  </svg>
-                  Buy Me A Coffee
-                </button>
-                <button className="flex items-center text-gray-600 hover:text-gray-800">
-                  <svg
-                    className="w-5 h-5 mr-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                  </svg>
-                  Feedback
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-            {/* Left Column */}
-            <div className="space-y-6">
-              <div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h5 className="font-semibold text-gray-800 mb-2">
-                    File Details:
-                  </h5>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>File Type: {pdfData?.tag}</li>
-                    <li>Size: {pdfData.size}</li>
-                    <li>
-                      Objective: Blank document needs, Obtaining a new pdf file,
-                      File Upload Test for your Website or Project, and general
-                      development experiments
+                  Key Points
+                </h3>
+                <ul className="space-y-3 text-[#4B5563]">
+                  {keyPoints.map((point: string, index: number) => (
+                    <li
+                      key={index}
+                      className="flex items-start gap-3 bg-white p-3 rounded-lg shadow-sm border border-gray-100"
+                    >
+                      <span className="text-[#3F7EF8] mt-0.5 flex-shrink-0 font-bold text-lg">
+                        •
+                      </span>
+                      <span className="flex-1 leading-relaxed">{point}</span>
                     </li>
-                  </ul>
-                </div>
-
-                <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-                  <h5 className="font-semibold text-gray-800 mb-2">
-                    Information About PDF Format
-                  </h5>
-                  <p className="text-sm text-gray-600">{pdfData?.summary}</p>
-                  <div className="mt-3 text-xs text-gray-500 space-y-1">
-                    <p>Mimetype: application/pdf</p>
-                    <p>Extension: pdf</p>
-                    <p>Developer: Adobe</p>
-                    <p>Published: {new Date().toLocaleDateString()}</p>
-                  </div>
-                </div>
+                  ))}
+                </ul>
               </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-6">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h5 className="font-semibold text-gray-800 mb-3">
-                  Example PDF File Information
-                </h5>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Format:</span>
-                    <span className="text-gray-800">PDF</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Extension:</span>
-                    <span className="text-gray-800">pdf</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">MIME Type:</span>
-                    <span className="text-gray-800">application/pdf</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Category:</span>
-                    <span className="text-gray-800">Document</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Size:</span>
-                    <span className="text-gray-800">{pdfData.size}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Developer:</span>
-                    <span className="text-gray-800">Adobe</span>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-sm text-gray-600 mb-2">
-                    Tags: {pdfData?.tag}
-                  </p>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Related: Methods and Tools
-                  </p>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Article: for Editing PDF Files
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Action Buttons */}
-        <div className="px-6 py-6 bg-gray-50 ">
+      {/* Action Buttons */}
+      <div className="w-full max-w-4xl">
+        <div>
           <div className="flex gap-4">
             <button
               onClick={handleDownload}
-              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3.5 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
             >
-              Download
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Download PDF ({fileSize})
             </button>
             <button
               onClick={handleShare}
-              className="flex-1 bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              className="flex-1 bg-gray-100 text-gray-800 px-6 py-3.5 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200 flex items-center justify-center gap-2 border border-gray-300 hover:border-gray-400"
             >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                />
+              </svg>
               Share
             </button>
           </div>
         </div>
       </div>
 
-      {/* Bottom Banner */}
+      {/* PDF Preview Styling */}
+      <style>{`
+        .pdf-preview-content {
+          font-size: 15px;
+          line-height: 1.75;
+          color: #374151;
+          font-family: 'Georgia', 'Times New Roman', serif;
+        }
+        
+        .pdf-preview-content h1,
+        .pdf-preview-content h2,
+        .pdf-preview-content h3,
+        .pdf-preview-content h4,
+        .pdf-preview-content h5,
+        .pdf-preview-content h6 {
+          font-weight: 700;
+          color: #111827;
+          margin-top: 24px;
+          margin-bottom: 16px;
+          line-height: 1.3;
+          letter-spacing: -0.02em;
+        }
+        
+        .pdf-preview-content h1 {
+          font-size: 28px;
+          border-bottom: 3px solid #3F7EF8;
+          padding-bottom: 12px;
+        }
+        
+        .pdf-preview-content h2 {
+          font-size: 24px;
+          border-bottom: 2px solid #E5E7EB;
+          padding-bottom: 8px;
+        }
+        
+        .pdf-preview-content h3 {
+          font-size: 20px;
+        }
+        
+        .pdf-preview-content h4 {
+          font-size: 18px;
+          font-weight: 600;
+        }
+        
+        .pdf-preview-content h5 {
+          font-size: 16px;
+        }
+        
+        .pdf-preview-content h6 {
+          font-size: 15px;
+        }
+        
+        .pdf-preview-content p {
+          margin-bottom: 16px;
+          line-height: 1.8;
+          color: #374151;
+          text-align: justify;
+        }
+        
+        .pdf-preview-content p:first-of-type {
+          margin-top: 0;
+        }
+        
+        .pdf-preview-content strong,
+        .pdf-preview-content b {
+          font-weight: 700;
+          color: #111827;
+        }
+        
+        .pdf-preview-content em,
+        .pdf-preview-content i {
+          font-style: italic;
+          color: #4B5563;
+        }
+        
+        .pdf-preview-content ul,
+        .pdf-preview-content ol {
+          margin-top: 16px;
+          margin-bottom: 20px;
+          padding-left: 32px;
+        }
+        
+        .pdf-preview-content ul {
+          list-style-type: disc;
+        }
+        
+        .pdf-preview-content ol {
+          list-style-type: decimal;
+        }
+        
+        .pdf-preview-content li {
+          margin-bottom: 10px;
+          line-height: 1.75;
+          color: #374151;
+        }
+        
+        .pdf-preview-content li strong,
+        .pdf-preview-content li b {
+          font-weight: 700;
+          color: #111827;
+        }
+        
+        .pdf-preview-content img {
+          max-width: 100%;
+          height: auto;
+          margin: 20px 0;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .pdf-preview-content blockquote {
+          border-left: 4px solid #3F7EF8;
+          padding-left: 20px;
+          margin: 20px 0;
+          color: #4B5563;
+          font-style: italic;
+          background-color: #F9FAFB;
+          padding: 16px 20px;
+          border-radius: 0 8px 8px 0;
+        }
+        
+        .pdf-preview-content code {
+          background-color: #F3F4F6;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-family: 'Courier New', 'Monaco', monospace;
+          font-size: 0.9em;
+          color: #DC2626;
+          border: 1px solid #E5E7EB;
+        }
+        
+        .pdf-preview-content pre {
+          background-color: #1F2937;
+          color: #F9FAFB;
+          padding: 16px;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 20px 0;
+          border: 1px solid #374151;
+        }
+        
+        .pdf-preview-content pre code {
+          background-color: transparent;
+          padding: 0;
+          border: none;
+          color: inherit;
+        }
+        
+        .pdf-preview-content table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 20px 0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        
+        .pdf-preview-content table th,
+        .pdf-preview-content table td {
+          border: 1px solid #E5E7EB;
+          padding: 12px 16px;
+          text-align: left;
+        }
+        
+        .pdf-preview-content table th {
+          background-color: #3F7EF8;
+          color: #FFFFFF;
+          font-weight: 600;
+        }
+        
+        .pdf-preview-content table tr:nth-child(even) {
+          background-color: #F9FAFB;
+        }
+        
+        .pdf-preview-content table tr:hover {
+          background-color: #F3F4F6;
+        }
+        
+        .pdf-preview-content a {
+          color: #3F7EF8;
+          text-decoration: underline;
+        }
+        
+        .pdf-preview-content a:hover {
+          color: #2563EB;
+        }
+        
+        .pdf-preview-content hr {
+          border: none;
+          border-top: 2px solid #E5E7EB;
+          margin: 24px 0;
+        }
+      `}</style>
     </div>
   );
 }

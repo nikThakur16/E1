@@ -79,8 +79,19 @@ const validateAndTransformResponse = (response: any): SummaryData | null => {
       return response.data[0]; // Return first item
     }
 
+    // Check if it's text/url format (has extraction and summarization at root)
+    if (response.extraction && response.summarization) {
+      return response;
+    }
+
     // Check if it's the old format
     if (response.summary && response.mediaFile) {
+      return response;
+    }
+
+    // If it's already a SummaryData format (e.g., from storage rehydration)
+    // Check for common summary data fields
+    if (response.summary || response.summarization || response.aiActionList) {
       return response;
     }
 

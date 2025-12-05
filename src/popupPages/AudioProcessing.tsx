@@ -5,7 +5,7 @@ import { Stepper } from "../components/popup/Stepper";
 import { useState, useEffect, useRef } from "react";
 import { useUploadFileAndGetSummaryMutation } from "../store/api/authApi";
 import { useDispatch } from "react-redux";
-import { setSummary, setLoading, setError } from "../store/slices/summarySlice";
+import { setSummary, setLoading, setError, clearSummary } from "../store/slices/summarySlice";
 import type { SummaryData } from "../store/slices/summarySlice";
 import GenratingSumModal from "../components/popup/GenratingSumModal";
 import { useUpload } from '../context/UploadContext';
@@ -16,7 +16,7 @@ const AudioProcessing = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [uploadSummary, { isLoading, isError, error }] = useUploadFileAndGetSummaryMutation();
-  const { upload, clearUpload } = useUpload();
+  const { upload, clearUpload, isRehydrating } = useUpload();
   
   // Loader state
   const [currentIcon, setCurrentIcon] = useState("/popup/RS1.svg");
@@ -52,6 +52,17 @@ const AudioProcessing = () => {
 
   // Process audio with API
   const processAudio = async (audioFile: File) => {
+    // Clear old summary data before generating new one
+    dispatch(clearSummary());
+    if (chrome?.storage?.local) {
+      try {
+        await chrome.storage.local.remove('currentSummary');
+        console.log('Cleared old summary from storage before generating new one');
+      } catch (e) {
+        console.error('Failed to clear old summary:', e);
+      }
+    }
+
     setIsProcessing(true);
     setCurrentStep(0);
     setCompletedSteps([]);
@@ -192,16 +203,17 @@ const AudioProcessing = () => {
   }, [upload]);
 
   // Handle showError state similar to Processing.tsx
+  // Wait for rehydration to complete before showing error
   useEffect(() => {
-    if (!upload) {
+    if (!upload && !isRehydrating) {
       const timer = setTimeout(() => {
         setShowError(true);
-      }, 1000);
+      }, 2000); // Increased timeout to allow for rehydration from other tabs
       return () => clearTimeout(timer);
     } else {
       setShowError(false);
     }
-  }, [upload]);
+  }, [upload, isRehydrating]);
 
   // Audio player controls
   const togglePlay = () => {

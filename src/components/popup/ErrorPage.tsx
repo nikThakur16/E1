@@ -17,7 +17,7 @@ const ErrorPage: React.FC<Props> = ({
   onHome,
 }) => {
   return (
-    <div className="w-full  bg-[#F4F8FF] rounded-2xl shadow px-10 py-12 flex flex-col items-center text-center space-y-3">
+    <div className="w-full  bg-[#F4F8FF] rounded-2xl h-full shadow px-10 py-12 flex flex-col items-center text-center space-y-3">
       {/* Static Icon */}
 
       <svg

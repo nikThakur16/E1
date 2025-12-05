@@ -84,12 +84,12 @@ export default function PopupLogin() {
   }, [navigate]);
 
   return (
-    <div className="bg-gradient-to-b from-[#3F7EF8] to-[#5B9AFF]   w-full h-full ">
-      <div className="w-full mx-auto flex justify-center h-[20%]">
-        <img src="/web/logo.svg" alt="logo" className="h-[40%] w-[45%] my-auto" />
+    <div className="bg-gradient-to-b from-[#3F7EF8] to-[#5B9AFF] w-full min-h-full flex flex-col">
+      <div className="w-full mx-auto flex justify-center py-4">
+        <img src="/web/logo.svg" alt="logo" className="h-[60%] w-[45%] my-auto" />
       </div>
-      <div className="bg-white h-[80%] flex flex-col justify-between rounded-[26px]">
-        <div className="px-6 pt-4 ">
+      <div className="bg-white flex-1 min-h-0 flex flex-col justify-between rounded-[16px] overflow-hidden">
+        <div className="px-6 pt-4 overflow-y-auto pb-4">
           <h2 className="text-[22px] font-semibold tracking-[-1%] text-[#1F2937] mb-3 text-center">
             Let’s Get Started
           </h2>
@@ -98,7 +98,7 @@ export default function PopupLogin() {
             summarize your meetings & recordings live.
           </p>
 
-          <div className="space-y-2 mt-[14px] grid grid-cols-2">
+          <div className="gap-2 mt-[14px] grid grid-cols-2">
             {/* record audio */}
             <div className="col-span-1">
               <div className="flex items-center  max-h-[80px]  gap-4 p-2  ">
@@ -362,7 +362,7 @@ export default function PopupLogin() {
         </div>
         <div>
       <div className="px-6">
-      <div className="p-3 rounded-[9px] mb-2  bg-[#F1F1F166]">
+      <div className="p-3  mb-2  bg-[#F1F1F166]">
             <p className="text-[#4B5563] text-center text-[14px] font-bold">
               🔒 100% Private & Secure | No recordings saved
             </p>

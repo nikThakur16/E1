@@ -87,16 +87,17 @@
         checkRecordingState();
       }
       
-      // Handle route changes
+      // Handle route changes - sync across all popup instances
       if (changes.lastPopupRoute) {
-        console.log('🔄 Popup route changed:', changes.lastPopupRoute.newValue);
+        const newRoute = changes.lastPopupRoute.newValue;
+        console.log('🔄 Popup route changed:', newRoute);
         // Update any route-related UI elements
-        updateUIForRoute(changes.lastPopupRoute.newValue);
+        updateUIForRoute(newRoute);
         
         // Notify popup about route change for synchronization
         chrome.runtime.sendMessage({
           type: 'SYNC_DATA',
-          data: { route: changes.lastPopupRoute.newValue }
+          data: { route: newRoute }
         }).catch(() => {
           // Ignore errors if popup is not open
         });
@@ -123,12 +124,19 @@
         // Update any upload-related UI elements
         updateUIForUpload(changes['popup:upload'].newValue);
         
-        // Notify popup about upload change for synchronization
-        chrome.runtime.sendMessage({
-          type: 'SYNC_DATA',
-          data: { upload: changes['popup:upload'].newValue }
-        }).catch(() => {
-          // Ignore errors if popup is not open
+        // Get the route for the upload to include in sync message
+        chrome.storage.local.get('lastPopupRoute').then((result) => {
+          const route = result?.lastPopupRoute;
+          // Notify popup about upload change for synchronization
+          chrome.runtime.sendMessage({
+            type: 'SYNC_DATA',
+            data: { 
+              upload: changes['popup:upload'].newValue,
+              route: route // Include route for navigation
+            }
+          }).catch(() => {
+            // Ignore errors if popup is not open
+          });
         });
       }
     }
@@ -1358,7 +1366,7 @@
   display: none;
   z-index: 1000000;
   width:  600px;
-height: min(98vh, 800px);
+height: min(98vh, 700px);
   box-sizing: border-box;
 `;
 
