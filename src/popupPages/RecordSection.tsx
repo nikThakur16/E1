@@ -43,7 +43,7 @@ export default function RecordSection() {
   // Add state to track if we're waiting for blob creation
   const [waitingForBlob, setWaitingForBlob] = useState(false);
 
-  const { setUpload } = useUpload();
+  const { setUpload, clearUpload } = useUpload();
 
   // Helper function to safely clean up streams (real or simulated)
   const safelyCleanupStream = (streamToClean: any, context: string = "") => {
@@ -278,10 +278,7 @@ export default function RecordSection() {
         if (event.data.data && Array.isArray(event.data.data)) {
           setWaveformData(event.data.data);
 
-          // Update status to show data source for debugging
-          if (recording && isFromRecordingTab) {
-            console.log("📡 Using cross-tab waveform data from recording tab");
-          }
+       
         }
       }
     };
@@ -347,14 +344,17 @@ export default function RecordSection() {
       console.log('✅ Recording blob processed successfully - navigating to processing');
       
       // Navigate directly to processing page with audio data in context
-      navigate('/record/process');
+      navigate('/popup/record/process');
       
     } catch (error) {
       console.error('❌ Error processing recording blob:', error);
       setStatus('Error processing recording');
       
-      // Still navigate to processing page
-      navigate('/error');
+      // Clear upload context on error to prevent stale data
+      await clearUpload();
+      
+      // Navigate to error page
+      navigate('/popup/error');
     }
   };
 
@@ -965,8 +965,7 @@ Then click the record button again.`);
         } else {
           console.log("⚠️ No blob in stop result, waiting for RECORDING_BLOB_READY message...");
           console.log("🔍 Available stop result properties:", Object.keys(stopResult));
-          // The blob will come via the message listener for RECORDING_BLOB_READY
-          // Just reset the UI state and wait for the message
+ 
         }
 
         stopTimer();
@@ -1516,6 +1515,9 @@ Then click the record button again.`);
       await chrome?.storage?.local.set({
         currentView: null,
       });
+
+      // Clear upload context to prevent old recordings from appearing in upload page
+      await clearUpload();
 
       console.log("✅ All recording data cleared - navigating to home");
       // Always navigate back to home

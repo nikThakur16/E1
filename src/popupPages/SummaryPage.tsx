@@ -6,17 +6,18 @@ import { useLocation } from "react-router-dom";
 import Heading from "../components/popup/Heading";
 import DropdownMenu from "../components/popup/DropdownMenu";
 import DownloadExtensionModal from "../components/popup/DownloadExtensionModal";
-import { useGetSummaryWithActionsMutation } from "../store/api/authApi";
-import { setSummaryFromApiResponse, setApiError, clearSummary } from "../store/slices/summarySlice";
+import CancelModal from "../components/popup/CancelModal";
+import { useGetSummaryWithActionsMutation, useDeleteSummaryMutation } from "../store/api/authApi";
+import { setSummaryFromApiResponse, setSummary, setApiError, clearSummary } from "../store/slices/summarySlice";
 import { setLectureNotesData, setPdfViewData } from "../store/slices/navigationSlice";
 import { type KeyPoint } from "../store/slices/summarySlice";
 import { useUpload } from "../context/UploadContext";
-import Loader from "../components/popup/Loader";
 
 
 export default function SummaryPage() {
   const { currentSummary, isLoading, error, apiError } = useSelector((state: RootState) => state.summary);
   const [getSummaryWithActions, { isLoading: isFetchingSummaryWithActions, error: summaryWithActionsError }] = useGetSummaryWithActionsMutation();
+  const [deleteSummary, { isLoading: isDeletingSummary }] = useDeleteSummaryMutation();
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function SummaryPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedActions, setExpandedActions] = useState(false);  
   const [showDownload, setShowDownload] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDisable, setIsDisable] = useState(false);
@@ -38,7 +40,7 @@ export default function SummaryPage() {
 
   // Helper function to get the correct summary data path
   const getSummaryData = () => {
-    console.log("###########11111#################",currentSummary , currentSummary?.summary?.transcription?.content);
+    console.log("###########11111#################",currentSummary );
     if (isUrlResponse()) {
       console.log("###########22222#################",currentSummary);
       return {
@@ -51,9 +53,10 @@ export default function SummaryPage() {
     
     return {
     
-      summary: currentSummary?.summary?.summary,
+   
+      summary: currentSummary?.summary,
       summarization: currentSummary?.summary?.summarization,
-      transcription: currentSummary?.summary?.transcription?.content,
+      transcription: currentSummary?.summary?.transcription,
       aiActions: currentSummary?.aiActionList || [],
     };
   };
@@ -135,65 +138,100 @@ export default function SummaryPage() {
     }
   };
 
-  // Export to PDF functionality with loader
+  // Export to PDF functionality - navigate to PDF preview page
   const handleExportToPDF = async () => {
     try {
-      setLoading(true);
-      
-      // Simulate PDF generation delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const { summary, summarization, transcription } = getSummaryData();
+      const { summary, transcription } = getSummaryData();
+      const title = summary?.title || "Untitled Summary";
+      const htmlContent = summary?.summary_html || overview || "No summary available";
+      const transcriptionText = getTextContent(transcription);
       const keyPoints = getKeyPoints();
+      const tag = summary?.content_type || "Document";
+      const date = summary?.created_at ? new Date(summary.created_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) : new Date().toLocaleDateString();
       
       // Prepare PDF data
       const pdfData = {
-        title: summary?.title || "Untitled Summary",
-        size: "4 MB", // You can calculate actual size if needed
-        content: summary?.content || "",
-        summary: summarization?.shortSummary || summary?.short_summary || "No summary available",
+        title: title,
+        summary_html: htmlContent,
+        content: htmlContent, // Fallback for PDFViewPage
+        summary: overview, // Text summary for display
         keyPoints: keyPoints.map(kp => kp.point),
-        transcription: getTextContent(transcription),
-        createdAt: summary?.created_at || new Date().toISOString(),
-        tag: summary?.tag || "Document"
+        transcription: transcriptionText,
+        tag: tag,
+        createdAt: date,
+        size: "N/A" // Size will be calculated when PDF is generated
       };
       
-      // Store PDF data in Redux and navigate
-      console.log("Storing PDF data in Redux:", pdfData);
+      // Store current route for back navigation
+      if (chrome?.storage?.local) {
+        await chrome.storage.local.set({ 
+          'navigationRoute': location.pathname 
+        });
+      }
       
-      dispatch(setPdfViewData({
-        pdfData: pdfData
-      }));
-      
-      setTimeout(async () => {
-        if(chrome?.storage?.local) {
-          await chrome.storage.local.set({ navigationRoute: '/popup/summary' });
-          
-        }
-        navigate('/popup/pdf-view');
-      }, 100);
+      // Store PDF data in Redux and navigate to PDF preview page
+      dispatch(setPdfViewData({ pdfData }));
+      navigate('/popup/pdf-view');
       
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      setLocalError("Failed to generate PDF. Please try again.");
-    } finally {
-      setLoading(false);
+      console.error("Error preparing PDF data:", error);
+      setLocalError("Failed to prepare PDF. Please try again.");
     }
   };
 
-  // Delete functionality: if text input, return to text page with prefilled content
+  // Show delete confirmation modal
   const handleDelete = () => {
-   
+    setShowDeleteModal(true);
+  };
+
+  // Confirm delete - call API and handle navigation
+  const confirmDelete = async () => {
     try {
-      const stateText = (location.state as any)?.text as string | undefined;
-      if (upload?.type === 'text' || (!!stateText && !upload)) {
-        navigate('popup/text', { state: { text: upload?.text || stateText || '' } });
+      const { summary } = getSummaryData();
+      
+      if (!summary?.id) {
+        setLocalError("Summary ID not found. Cannot delete.");
+        setShowDeleteModal(false);
         return;
       }
-      // Default: Go back to processing page, keep uploaded file (IDB)
-      navigate('/popup/upload/process');
-    } catch (e) {
-      navigate('/popup/upload/process');
+
+      // Call delete API
+      await deleteSummary({ id: summary.id }).unwrap();
+      
+      // Clear summary data from Redux
+      dispatch(clearSummary());
+      clearUpload();
+      
+      // Clear stored summary from chrome storage
+      if (chrome?.storage?.local) {
+        try {
+          await chrome.storage.local.remove('currentSummary');
+        } catch (error) {
+          console.error('Error clearing stored summary:', error);
+        }
+      }
+      
+      // Close modal
+      setShowDeleteModal(false);
+      
+      // Navigate based on upload type
+      const stateText = (location.state as any)?.text as string | undefined;
+      if (upload?.type === 'text' || (!!stateText && !upload)) {
+        navigate('/popup/text', { state: { text: upload?.text || stateText || '' } });
+      } else {
+        // Default: Go back to processing page
+        navigate('/popup/upload/process');
+      }
+    } catch (error: any) {
+      console.error("Error deleting summary:", error);
+      setLocalError(error?.data?.message || "Failed to delete summary. Please try again.");
+      setShowDeleteModal(false);
     }
   };
 
@@ -252,7 +290,6 @@ export default function SummaryPage() {
 
   // Handle action button click
   const handleActionClick = async (action: any) => {
-    console.log("Action button clicked:", action);
     setLoading(true);
     try {
       const { summary, transcription } = getSummaryData();
@@ -315,15 +352,26 @@ export default function SummaryPage() {
     setLocalError(null);
   }, [currentSummary]);
 
-  // Rehydrate summary from storage if page revisited without state
+  // Rehydrate summary from storage only if we don't have one in Redux
+  // and we're not coming from a navigation with new summary data
   useEffect(() => {
     (async () => {
       try {
+        // Don't rehydrate if we have summary data in location state (new summary)
+        const locationState = location.state as any;
+        if (locationState?.summary) {
+          console.log('Summary data provided via navigation state, skipping rehydration');
+          return;
+        }
+        
+        // Only rehydrate if we don't have a summary in Redux
         if (!currentSummary && chrome?.storage?.local) {
           const res = await chrome.storage.local.get('currentSummary');
           const stored = res?.currentSummary;
           if (stored) {
             console.log('Rehydrating summary from storage:', stored);
+            // Use setSummary directly since data from storage is already in correct format
+            // setSummaryFromApiResponse will also work now with updated validation
             dispatch(setSummaryFromApiResponse(stored));
           }
         }
@@ -342,6 +390,7 @@ export default function SummaryPage() {
         const stored = res?.currentSummary;
         if (stored) {
           console.log('Found stored summary, restoring:', stored);
+          // Use setSummaryFromApiResponse with updated validation that handles text/url format
           dispatch(setSummaryFromApiResponse(stored));
         }
       }).catch(e => {
@@ -457,9 +506,9 @@ export default function SummaryPage() {
     minute: '2-digit'
   });
 
-  const tag = summary?.tag || "Document";
+  const tag = summary?.content_type || "Document";
   const title = summary?.title || "Untitled";
-  const overview = summarization?.shortSummary || summary?.short_summary || "No summary available";
+  const overview = summary?.summary_html || "No summary available"; 
   const keyPoints = getKeyPoints();
   const transcriptionText = getTextContent(transcription);
  
@@ -495,11 +544,6 @@ export default function SummaryPage() {
             />
           </div>
         </div>
-
-        {/* PDF Generation Loader Overlay */}
-        {loading && (
-          <Loader isLoading={loading}/>
-        )}
 
         {/* Date + Tag */}
         <div className="flex items-center justify-between mb-4">
@@ -559,10 +603,10 @@ export default function SummaryPage() {
             {isSectionOpen("summary") && (
               <div className="p-4 bg-white rounded-b-xl">
                 <div className="mb-4">
-                 
-                  <p className="text-[16px] font-[400] text-[#4B5563] leading-[1.46]">
-                    {overview}
-                  </p>
+                  <div 
+                    className="summary-html-content"
+                    dangerouslySetInnerHTML={{ __html: overview }}
+                  />
                 </div>
               </div>
             )}
@@ -750,6 +794,107 @@ export default function SummaryPage() {
         isOpen={showDownload} 
         onClose={() => setShowDownload(false)} 
       />
+      
+      {showDeleteModal && (
+        <CancelModal
+          onClose={() => setShowDeleteModal(false)}
+          onCancel={confirmDelete}
+          title="Delete Summary"
+          description="Are you sure you want to delete this summary? This action cannot be undone."
+          btnText="Delete"
+        />
+      )}
+      
+      <style>{`
+        .summary-html-content {
+          font-size: 16px;
+          line-height: 1.46;
+          color: #4B5563;
+        }
+        
+        .summary-html-content h1,
+        .summary-html-content h2,
+        .summary-html-content h3,
+        .summary-html-content h4,
+        .summary-html-content h5,
+        .summary-html-content h6 {
+          font-weight: 600 !important;
+          color: #1F2937 !important;
+          margin-top: 1.5rem;
+          margin-bottom: 1rem;
+          line-height: 1.3;
+          display: block;
+        }
+        
+        .summary-html-content h1 {
+          font-size: 24px !important;
+        }
+        
+        .summary-html-content h2 {
+          font-size: 20px !important;
+          font-weight: 600 !important;
+        }
+        
+        .summary-html-content h3 {
+          font-size: 18px !important;
+        }
+        
+        .summary-html-content h4 {
+          font-size: 16px !important;
+          font-weight: 600 !important;
+        }
+        
+        .summary-html-content p {
+          margin-bottom: 1rem;
+          line-height: 1.46;
+          color: #4B5563;
+          display: block;
+        }
+        
+        .summary-html-content strong,
+        .summary-html-content b {
+          font-weight: 600 !important;
+          color: #1F2937 !important;
+        }
+        
+        .summary-html-content ul,
+        .summary-html-content ol {
+          margin-top: 0.75rem;
+          margin-bottom: 1rem;
+          padding-left: 1.5rem;
+          list-style-position: outside;
+          display: block;
+        }
+        
+        .summary-html-content ul {
+          list-style-type: disc;
+        }
+        
+        .summary-html-content ol {
+          list-style-type: decimal;
+        }
+        
+        .summary-html-content li {
+          margin-bottom: 0.5rem;
+          line-height: 1.46;
+          color: #4B5563;
+          display: list-item;
+        }
+        
+        .summary-html-content li strong,
+        .summary-html-content li b {
+          font-weight: 600 !important;
+          color: #1F2937 !important;
+        }
+        
+        .summary-html-content div {
+          line-height: 1.46;
+        }
+        
+        .summary-html-content * {
+          box-sizing: border-box;
+        }
+      `}</style>
     </div>
   );
 }

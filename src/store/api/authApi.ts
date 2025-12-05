@@ -188,6 +188,22 @@ export const authApi = createApi({
         body: data,
       }),
     }),
+    //update summary
+    updateSummary: builder.mutation<ApiResponse, {id: number, title:string}>({
+      query: (data: {id: number, title:string}) => ({
+        url: '/update-summary',
+        method: 'PUT',
+        body: {id: data.id, title: data.title},
+      }),
+    }),
+    //delete summary
+    deleteSummary: builder.mutation<ApiResponse, {id: number}>({
+      query: (data: {id: number}) => ({
+        url: '/delete-summary',
+        method: 'DELETE',
+        body: {id: data.id},
+      }),
+    }),
         //get ai actions
         getAIActions: builder.query<AIActionsResponse, number>({
           query: (id: number) => ({
@@ -242,5 +258,7 @@ export const {
   useGetSummaryForUrlMutation,
   useGetSummaryWithTextMutation,
   useGoogleLoginMutation,
-  useAppleLoginMutation
+  useAppleLoginMutation,
+  useUpdateSummaryMutation,
+  useDeleteSummaryMutation
     } = authApi; 

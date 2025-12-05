@@ -10,11 +10,22 @@ export default function UploadOptionsPage() {
   const { upload, setUpload } = useUpload();
   
 
-  // If upload exists (from context or storage), redirect to /upload/process
+  // If upload exists (from context or storage), redirect to appropriate process page
+  // Recordings should go to /record/process, file uploads to /upload/process
   useEffect(() => {
     if (upload) {
-      navigate("/popup/upload/process", { replace: true });
-    } else{}
+      // Check if this is a recording (file name starts with "recording_")
+      const isRecording = upload.fileName?.startsWith("recording_") || 
+                         upload.name?.startsWith("recording_");
+      
+      if (isRecording && upload.type === "audio") {
+        // Recording uploads should go to record processing page
+        navigate("/popup/record/process", { replace: true });
+      } else {
+        // File uploads go to upload processing page
+        navigate("/popup/upload/process", { replace: true });
+      }
+    }
   }, [upload, navigate]);
 
   // function openPersistentUploadWindow() {
@@ -101,7 +112,17 @@ export default function UploadOptionsPage() {
   useEffect(() => {
     if (upload) {
       console.log("Upload ready, navigating now:", upload);
-      navigate("/popup/upload/process", { replace: true });
+      // Check if this is a recording (file name starts with "recording_")
+      const isRecording = upload.fileName?.startsWith("recording_") || 
+                         upload.name?.startsWith("recording_");
+      
+      if (isRecording && upload.type === "audio") {
+        // Recording uploads should go to record processing page
+        navigate("/popup/record/process", { replace: true });
+      } else {
+        // File uploads go to upload processing page
+        navigate("/popup/upload/process", { replace: true });
+      }
     }
   }, [upload, navigate]);
   

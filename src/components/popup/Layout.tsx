@@ -52,7 +52,7 @@ export default function Layout() {
   }, []);
 
   return (
-    <div ref={popupRef} className="popup-container">
+    <div ref={popupRef} className="popup-container z-50">
       <Outlet />
     </div>
   );
